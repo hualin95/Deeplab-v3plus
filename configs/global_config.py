@@ -34,3 +34,5 @@ cfg.amsgrad = 0.1
 # lr_scheduler
 cfg.step_size = 2
 cfg.gamma = 0.94
+
+cfg.pretrained = False
