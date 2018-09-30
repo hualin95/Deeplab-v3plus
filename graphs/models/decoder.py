@@ -5,12 +5,14 @@
 # @File    : decoder.py
 # @Software: PyCharm
 
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 import sys
-sys.path.append('/home/linhua/projects/deeplab/')
+sys.path.append(os.path.abspath('..'))
+
 from graphs.models.encoder import Encoder
 from graphs.models.AlignedXceptionWithoutDeformable import SeparableConv2d
 
@@ -47,4 +49,6 @@ if __name__ =="__main__":
     with torch.no_grad():
         output= model.forward(image)
     print(output.size())
+
+
 

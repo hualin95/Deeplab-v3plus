@@ -15,8 +15,10 @@ import torchvision.transforms as transforms
 
 from tqdm import tqdm, trange
 from configparser import ConfigParser
+
 import sys
-sys.path.append('/home/linhua/projects/deeplab/')
+sys.path.append(os.path.abspath('..'))
+
 from utils.data_utils import calculate_weigths_labels
 from graphs.models.decoder import Decoder
 from datasets.Voc_Dataset import VOCDataLoader
@@ -83,21 +85,22 @@ class Trainer():
         if self.cuda:
             # torch.cuda.set_device(4)
             current_device = torch.cuda.current_device()
-            print("Running on", torch.cuda.get_device_name(current_device))
+            print("This model will run on", torch.cuda.get_device_name(current_device))
         else:
-            print("Running on CPU")
+            print("This model will run on CPU")
 
-        for epoch in range(self.current_epoch, self.epoch_num):
-            train_epoch = tqdm(total=self.epoch_num-self.current_epoch)
+        for epoch in tqdm(range(self.current_epoch, self.epoch_num),
+                          desc="Total {} epochs".format(self.config.epoch_num)):
             self.current_epoch = epoch
             self.scheduler.step(epoch)
             self.train_one_epoch()
+
             # train_epoch.close()
 
 
     def train_one_epoch(self):
         tqdm_batch = tqdm(self.dataloader.train_loader, total=self.dataloader.train_iterations,
-                          desc="Epoch-{}-".format(self.current_epoch))
+                          desc="Epoch-{}-".format(self.current_epoch+1))
         # Set the model to be in training mode (for batchnorm)
         train_loss = 0
         self.model.train()
@@ -128,7 +131,7 @@ class Trainer():
             train_loss += cur_loss.item()
             self.current_iter += 1
             # exit(0)
-
+        tqdm.write("The loss of epoch-{}-:{}".format(self.current_epoch, train_loss))
         # tqdm_batch.close()
 
 

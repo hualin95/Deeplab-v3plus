@@ -5,12 +5,14 @@
 # @File    : encoder.py
 # @Software: PyCharm
 
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-# from Xception import Xception
+
 import sys
-sys.path.append('/home/linhua/projects/deeplab/')
+sys.path.append(os.path.abspath('..'))
+
 from graphs.models.AlignedXceptionWithoutDeformable import Xception
 
 class AsppModule(nn.Module):

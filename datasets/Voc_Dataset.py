@@ -39,7 +39,7 @@ class Voc_Dataset(data.Dataset):
         elif self.dataset == 'voc2012':
             self.data_path = os.path.join(root_path, "VOC2012")
             if is_training:
-                item_list_filepath = os.path.join(self.data_path, "ImageSets/Segmentation/train.txt")
+                item_list_filepath = os.path.join(self.data_path, "ImageSets/Segmentation/train_mini.txt")
             else:
                 item_list_filepath = os.path.join(self.data_path, "ImageSets/Segmentation/val.txt")
 
@@ -63,7 +63,7 @@ class Voc_Dataset(data.Dataset):
         image_path = os.path.join(self.image_filepath, "{}.jpg".format(id))
         gt_image_path = os.path.join(self.gt_filepath, "{}.png".format(id))
         image = Image.open(image_path).convert("RGB")
-        gt_image = Image.open(gt_image_path)
+        gt_image = Image.open(gt_image_path).convert('P')
 
         if transforms:
             image = self.im_transforms(image)
