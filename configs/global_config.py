@@ -18,7 +18,8 @@ cfg.data_loader_workers = 2
 cfg.pin_memory = True
 
 cfg.batch_size = 2
-cfg.epoch_num = 15
+cfg.epoch_num = 5
+cfg.batch_save = 2
 # Nesterov Momentum
 cfg.lr = 0.05
 cfg.momentum = 0.9

@@ -6,11 +6,13 @@
 # @Software: PyCharm
 
 import os
+import glog as log
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.optim import lr_scheduler
 import argparse
+from tensorboardX import SummaryWriter
 import torchvision.transforms as transforms
 
 from tqdm import tqdm, trange
@@ -23,6 +25,7 @@ from utils.data_utils import calculate_weigths_labels
 from graphs.models.decoder import Decoder
 from datasets.Voc_Dataset import VOCDataLoader
 from configs.global_config import cfg
+
 
 arg_parser = argparse.ArgumentParser()
 
@@ -82,6 +85,7 @@ class Trainer():
 
 
     def main(self):
+        writer = SummaryWriter()
         if self.cuda:
             # torch.cuda.set_device(4)
             current_device = torch.cuda.current_device()
@@ -93,8 +97,10 @@ class Trainer():
                           desc="Total {} epochs".format(self.config.epoch_num)):
             self.current_epoch = epoch
             self.scheduler.step(epoch)
-            self.train_one_epoch()
+            train_loss = self.train_one_epoch()
 
+            writer.add_scalar('train', train_loss, epoch)
+        writer.close()
             # train_epoch.close()
 
 
@@ -102,11 +108,11 @@ class Trainer():
         tqdm_batch = tqdm(self.dataloader.train_loader, total=self.dataloader.train_iterations,
                           desc="Epoch-{}-".format(self.current_epoch+1))
         # Set the model to be in training mode (for batchnorm)
-        train_loss = 0
+        train_loss = []
         self.model.train()
         # Initialize your average meters
 
-
+        batch_idx = 0
         for x, y in tqdm_batch:
             # y.to(torch.long)
             if self.cuda:
@@ -128,15 +134,16 @@ class Trainer():
 
             cur_loss.backward()
             self.optimizer.step()
-            train_loss += cur_loss.item()
+            train_loss.append(cur_loss.data.cpu().numpy())
             self.current_iter += 1
-            # exit(0)
-        tqdm.write("The loss of epoch-{}-:{}".format(self.current_epoch, train_loss))
-        # tqdm_batch.close()
+            if batch_idx % self.config.save ==0:
+                tqdm.write("The loss of epoch:{}-batch-{}".format(self.current_epoch, batch_idx))
+            batch_idx += 1
 
-
-
-
+        loss = sum(train_loss)/len(train_loss)
+        tqdm.write("The average loss of epoch-{}-:{}".format(self.current_epoch, loss))
+        tqdm_batch.close()
+        return loss
 
 
 if __name__ == '__main__':
@@ -144,5 +151,3 @@ if __name__ == '__main__':
     config.read("../configs/deeplab.cfg", encoding="UTF-8")
     agent = Trainer(args=args, config=cfg, cuda=True)
     agent.main()
-
-
