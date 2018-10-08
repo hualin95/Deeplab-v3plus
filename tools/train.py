@@ -8,6 +8,7 @@
 import os
 import logging
 import numpy as np
+from PIL import Image
 import torch
 import torch.nn as nn
 from torch.optim import lr_scheduler
@@ -22,7 +23,7 @@ import sys
 sys.path.append(os.path.abspath('..'))
 
 from utils.data_utils import calculate_weigths_labels
-from utils.eval import Eval
+from utils.eval_2 import Eval
 from graphs.models.decoder import Decoder
 from datasets.Voc_Dataset import VOCDataLoader
 from configs.global_config import cfg
@@ -53,6 +54,7 @@ class Trainer():
         self.val_list_filepath = os.path.join(args.data_root_path, 'VOC2012/ImageSets/Segmentation/val.txt')
         self.gt_filepath = os.path.join(args.data_root_path, 'VOC2012/SegmentationClass/')
         self.pre_filepath = os.path.join(args.data_root_path, 'VOC2012/JPEGImages/')
+        self.Eval = Eval(self.config.num_classes)
         # loss definition
         if args.loss_weight:
             if not os.path.isfile(self.config.classes_weight):
@@ -194,26 +196,23 @@ class Trainer():
             val_loss.append(cur_loss.data.cpu().numpy())
             self.current_iter += 1
 
-            if
+            self.Eval.add_batch(y, pred)
+
+            if self.args.store_result == 'True':
+                for i in range(len(id)):
+                    result = Image.fromarray(y[i])
+                    result.save(self.args.result_filepath + id[i] + '.png', mdoe='P')
 
         loss = sum(val_loss) / len(val_loss)
         logging.info("The average loss of val loss:{}".format(loss))
         tqdm_batch.close()
 
-
-        evaluation = Eval(self.val_list_filepath, self.gt_filepath, self.pre_filepath, self.args.num_classes)
-        PA = np.mean(evaluation['PA'])
-        MPA = np.mean(evaluation['MPA'])
-        MIoU = np.mean(evaluation['MIoU'])
-        FWIoU = np.mean(evaluation['FWIoU'])
-
-
-    def val_one_batch(self):
-
-
+        PA = self.Eval.Pixel_Accuracy()
+        MPA = self.Eval.Mean_Pixel_Accuracy()
+        MIoU = self.Eval.Mean_Intersection_over_Union()
+        FWIoU = self.Eval.Frequency_Weighted_Intersection_over_Union()
 
         return PA, MPA, MIoU, FWIoU
-
 
 
 
