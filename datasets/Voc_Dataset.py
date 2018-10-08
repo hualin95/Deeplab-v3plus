@@ -68,7 +68,7 @@ class Voc_Dataset(data.Dataset):
         if transforms:
             image = self.im_transforms(image)
             gt_image =self.gt_transforms(gt_image)
-        return image, gt_image
+        return image, gt_image, id
 
 
 
