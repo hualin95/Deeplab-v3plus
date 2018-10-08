@@ -39,7 +39,7 @@ class Voc_Dataset(data.Dataset):
         elif self.dataset == 'voc2012':
             self.data_path = os.path.join(root_path, "VOC2012")
             if is_training:
-                item_list_filepath = os.path.join(self.data_path, "ImageSets/Segmentation/train_mini.txt")
+                item_list_filepath = os.path.join(self.data_path, "ImageSets/Segmentation/train.txt")
             else:
                 item_list_filepath = os.path.join(self.data_path, "ImageSets/Segmentation/val.txt")
 

@@ -17,9 +17,9 @@ cfg.classes_weight = 'F:/projects/Deeplab v3plus/pretrained_weights/voc2012_256_
 cfg.data_loader_workers = 2
 cfg.pin_memory = True
 
-cfg.batch_size = 2
-cfg.epoch_num = 5
-cfg.batch_save = 2
+cfg.batch_size = 4
+cfg.epoch_num = 100
+cfg.batch_save = 50
 # Nesterov Momentum
 cfg.lr = 0.05
 cfg.momentum = 0.9

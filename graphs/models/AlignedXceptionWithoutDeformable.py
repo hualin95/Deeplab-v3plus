@@ -25,7 +25,7 @@ class SeparableConv2d(nn.Module):
         self.depthwise = nn.Conv2d(in_channels, in_channels, kernel_size, stride, padding=padding, dilation=dilation,
                                    groups=in_channels, bias=bias)
         # extra BatchNomalization and ReLU
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU(inplace=True)
         self.bn = nn.BatchNorm2d(in_channels)
         self.pointwise = nn.Conv2d(in_channels, out_channels, 1, 1, 0, 1, 1, bias=bias)
 
