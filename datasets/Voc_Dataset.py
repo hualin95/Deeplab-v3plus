@@ -6,6 +6,7 @@
 # @Software: PyCharm
 
 import PIL
+import scipy.io
 from PIL import Image
 import numpy as np
 import cv2
@@ -29,6 +30,7 @@ class Voc_Dataset(data.Dataset):
         :param transforms:
         """
         self.dataset = dataset
+        self.is_training = is_training
         if self.dataset == 'voc2007':
             self.data_path = os.path.join(root_path, "VOC2007")
             if is_training:
@@ -43,11 +45,26 @@ class Voc_Dataset(data.Dataset):
             else:
                 item_list_filepath = os.path.join(self.data_path, "ImageSets/Segmentation/val.txt")
 
-        else:
-            raise Warning("dataset must be voc2007 or voc2012")
+        elif self.dataset == 'bsd':
+            self.data_path = os.path.join(root_path, "BSD")
+            if is_training:
+                item_list_filepath = os.path.join(self.data_path, "dataset/train.txt")
+            else:
+                item_list_filepath = os.path.join(self.data_path, "dataset/val.txt")
 
-        self.image_filepath = os.path.join(self.data_path, "JPEGImages")
-        self.gt_filepath = os.path.join(self.data_path, "SegmentationClass")
+        else:
+            raise Warning("dataset must be voc2007 or voc2012 or bsd")
+
+        if self.dataset == 'voc2007' or self.dataset == 'voc2012':
+            self.image_filepath = os.path.join(self.data_path, "JPEGImages")
+            self.gt_filepath = os.path.join(self.data_path, "SegmentationClass")
+
+        elif self.dataset == 'bsd':
+            self.image_filepath = os.path.join(self.data_path, "dataset/img")
+            self.gt_filepath = os.path.join(self.data_path, "dataset/cls_png")
+
+        else:
+            raise Warning("dataset must be voc2007 or voc2012 or bsd")
 
         self.items = [id.strip() for id in open(item_list_filepath)]
         self.classes = ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow',
@@ -60,10 +77,15 @@ class Voc_Dataset(data.Dataset):
 
     def __getitem__(self, item):
         id = self.items[item]
+        if self.dataset == 'bsd':
+            gt_image_path = os.path.join(self.gt_filepath, "{}.png".format(id))
+            gt_image = Image.open(gt_image_path)
+        else:
+            gt_image_path = os.path.join(self.gt_filepath, "{}.png".format(id))
+            gt_image = Image.open(gt_image_path).convert('P')
+
         image_path = os.path.join(self.image_filepath, "{}.jpg".format(id))
-        gt_image_path = os.path.join(self.gt_filepath, "{}.png".format(id))
         image = Image.open(image_path).convert("RGB")
-        gt_image = Image.open(gt_image_path).convert('P')
 
         if transforms:
             image = self.im_transforms(image)
@@ -77,7 +99,7 @@ class Voc_Dataset(data.Dataset):
 
 class VOCDataLoader():
     def __init__(self, config):
-        mean_std = ([103.939, 116.779, 123.68], [1.0, 1.0, 1.0])
+        mean_std = ([122.675, 116.669, 104.008], [1.0, 1.0, 1.0])
 
         self.config = config
         self.transform_image = transforms.Compose([
@@ -92,8 +114,8 @@ class VOCDataLoader():
             transforms.ToTensor()
         ])
 
-        train_set = Voc_Dataset(image_transforms=self.transform_image, gt_image_transforms=self.transform_gt)
-        val_set = Voc_Dataset(is_training=False, image_transforms=self.transform_image,
+        train_set = Voc_Dataset(dataset='bsd', image_transforms=self.transform_image, gt_image_transforms=self.transform_gt)
+        val_set = Voc_Dataset(dataset='voc2012', is_training=False, image_transforms=self.transform_image,
                               gt_image_transforms=self.transform_gt)
 
         self.train_loader = data.DataLoader(train_set, batch_size=self.config.batch_size, shuffle=True,
@@ -104,3 +126,10 @@ class VOCDataLoader():
                                        pin_memory=self.config.pin_memory)
         self.train_iterations = (len(train_set) + self.config.batch_size) // self.config.batch_size
         self.valid_iterations = (len(val_set) + self.config.batch_size) // self.config.batch_size
+
+
+if __name__ == '__main__':
+    data=scipy.io.loadmat('/data/linhua/VOCdevkit/BSD/dataset/cls/2008_003846.mat')
+    print(data['GTcls']["Segmentation"][0,0])
+    print(np.array([[(1,2,3)]]).shape)
+    print(np.array([[np.array(1), np.array(2), np.array(3)]]).shape)

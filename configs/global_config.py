@@ -17,8 +17,8 @@ cfg.classes_weight = 'F:/projects/Deeplab v3plus/pretrained_weights/voc2012_256_
 cfg.data_loader_workers = 2
 cfg.pin_memory = True
 
-cfg.batch_size = 4
-cfg.epoch_num = 100
+cfg.batch_size = 8
+cfg.epoch_num = 200
 cfg.batch_save = 50
 # Nesterov Momentum
 cfg.lr = 0.05
@@ -33,7 +33,9 @@ cfg.eps = 0.1
 cfg.amsgrad = 0.1
 
 # lr_scheduler
-cfg.step_size = 2
-cfg.gamma = 0.94
+cfg.step_size = 2000
+cfg.gamma = 0.1
 
 cfg.pretrained = False
+
+cfg.checkpoint_file = '59.pth'

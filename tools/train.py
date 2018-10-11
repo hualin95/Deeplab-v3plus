@@ -6,11 +6,13 @@
 # @Software: PyCharm
 
 import os
+import pprint
 import logging
 import numpy as np
 from PIL import Image
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.optim import lr_scheduler
 import argparse
 from tensorboardX import SummaryWriter
@@ -24,7 +26,8 @@ sys.path.append(os.path.abspath('..'))
 
 from utils.data_utils import calculate_weigths_labels
 from utils.eval_2 import Eval
-from graphs.models.decoder import Decoder
+from utils.eval_3 import scores
+from graphs.models.resnet101 import DeepLabv3_plus
 from datasets.Voc_Dataset import VOCDataLoader
 from configs.global_config import cfg
 
@@ -37,7 +40,7 @@ arg_parser.add_argument('--lr', default=0.05)
 arg_parser.add_argument('--imagenet_pretrained', default=True)
 arg_parser.add_argument('--data_root_path', default="/data/linhua/VOCdevkit/")
 arg_parser.add_argument('--result_filepath', default="/data/linhua/VOCdevkit/VOC2012/Results/")
-arg_parser.add_argument('--store_result', default=False)
+arg_parser.add_argument('--store_result', default=True)
 arg_parser.add_argument('--checkpoint_dir', default=os.path.abspath('..')+"/checkpoints/")
 
 
@@ -64,10 +67,15 @@ class Trainer():
         self.current_epoch = 0
         self.epoch_num = self.config.epoch_num
         self.current_iter = 0
+
+        # path definition
         self.val_list_filepath = os.path.join(args.data_root_path, 'VOC2012/ImageSets/Segmentation/val.txt')
         self.gt_filepath = os.path.join(args.data_root_path, 'VOC2012/SegmentationClass/')
         self.pre_filepath = os.path.join(args.data_root_path, 'VOC2012/JPEGImages/')
+
+        # Metric definition
         self.Eval = Eval(self.config.num_classes)
+
         # loss definition
         if args.loss_weight:
             if not os.path.isfile(self.config.classes_weight):
@@ -81,9 +89,10 @@ class Trainer():
         self.loss.to(self.device)
 
         # model
-        self.model = Decoder(self.config.num_classes, pretrained=args.imagenet_pretrained).to(self.device)
+        self.model = DeepLabv3_plus(nInputChannels=3, n_classes=21, os=16, pretrained=True, _print=True)
         self.model = nn.DataParallel(self.model)
-        # self.model.cuda()
+        self.model.to(self.device)
+
 
         # optimizer
         self.optimizer = torch.optim.SGD(params=self.model.parameters(),
@@ -98,9 +107,13 @@ class Trainer():
         self.dataloader = VOCDataLoader(self.config)
 
         # lr_scheduler
+        lambda1 = lambda epoch: pow((1 - ((epoch - 1) / self.config.epoch_num)), 0.9)
+        # self.scheduler = lr_scheduler.LambdaLR(self.optimizer, lr_lambda=lambda1)
         self.scheduler = lr_scheduler.StepLR(optimizer=self.optimizer,
                                              step_size=self.config.step_size,
                                              gamma=self.config.gamma)
+
+        # self.load_checkpoint(self.config.checkpoint_file)
 
 
 
@@ -112,13 +125,13 @@ class Trainer():
 
         # display config details
         logger.info("Global configuration as follows:")
-        logger.info(self.config)
+        pprint.pprint(self.config)
 
         # choose cuda
         if self.cuda:
             # torch.cuda.set_device(4)
             current_device = torch.cuda.current_device()
-            logger.info("This model will run on", torch.cuda.get_device_name(current_device))
+            logger.info("This model will run on {}".format(torch.cuda.get_device_name(current_device)))
         else:
             logger.info("This model will run on CPU")
 
@@ -131,11 +144,12 @@ class Trainer():
         for epoch in tqdm(range(self.current_epoch, self.epoch_num),
                           desc="Total {} epochs".format(self.config.epoch_num)):
             self.current_epoch = epoch
-            self.scheduler.step(epoch)
             self.train_one_epoch()
 
             # validate
-            PA, MPA, MIoU, FWIoU = self.validate()
+            # PA, MPA, MIoU, FWIoU = self.validate()
+            score = self.validate_3()
+            PA, MPA, MIoU, FWIoU = score.values()
             logger.info("PA:{}, MPA:{}, MIou:{}, FWIoU:{}".format(PA, MPA, MIoU, FWIoU))
 
             is_best = MIoU > self.best_MIou
@@ -157,6 +171,7 @@ class Trainer():
 
         batch_idx = 0
         for x, y, _ in tqdm_epoch:
+            self.scheduler.step()
             # y.to(torch.long)
             if self.cuda:
                 x, y = x.to(self.device), y.to(device=self.device, dtype=torch.long)
@@ -228,6 +243,53 @@ class Trainer():
 
         return PA, MPA, MIoU, FWIoU
 
+    def validate_3(self):
+        with torch.no_grad():
+            tqdm_batch = tqdm(self.dataloader.valid_loader, total=self.dataloader.valid_iterations,
+                              desc="Val Epoch-{}-".format(self.current_epoch + 1))
+            val_loss = []
+            preds = []
+            lab = []
+            self.model.eval()
+
+            for x, y, id in tqdm_batch:
+                # y.to(torch.long)
+                if self.cuda:
+                    x = x.to(self.device)
+
+                # model
+                pred = self.model(x)
+                y = torch.squeeze(y, 1)
+                # cur_loss = self.loss(pred, y)
+                # print(cur_loss)
+                # if np.isnan(float(cur_loss.item())):
+                #     raise ValueError('Loss is nan during training...')
+
+                # val_loss.append(cur_loss.item())
+                # pred = F.softmax(pred, dim = 1)
+                pred = pred.data.cpu().numpy()
+                argpred = np.argmax(pred, axis=1)
+                lab += list (y.numpy())
+                preds += list (argpred)
+
+                if self.args.store_result == True and self.current_epoch == 20:
+                    for i in range(len(id)):
+                        result = Image.fromarray(np.asarray(argpred, dtype=np.uint8)[i], mode='P')
+                        # logger.info("before:{}".format(result.mode))
+                        result = result.convert("RGB")
+                        # logger.info("after:{}".format(result.mode))
+                        # logger.info("shape:{}".format(result.getpixel((1,1))))
+                        result.save(self.args.result_filepath + id[i] + '.png')
+
+            # loss = sum(val_loss) / len(val_loss)
+            # logger.info("The average loss of val loss:{}".format(loss))
+
+            score = scores(lab, preds, n_class=21)
+            logger.info(score)
+            tqdm_batch.close()
+
+        return score
+
     def save_checkpoint(self, is_best, filename=None):
         """
         Save checkpoint if a new best is achieved
@@ -250,7 +312,21 @@ class Trainer():
             logger.info("=> The MIoU of val does't improve.")
 
     def load_checkpoint(self, filename):
-        filename = self.args.checkpoint_dir + filename
+        filename = os.path.join(self.args.checkpoint_dir, filename)
+        try:
+            logger.info("Loading checkpoint '{}'".format(filename))
+            checkpoint = torch.load(filename)
+
+            self.current_epoch = checkpoint['epoch']
+            self.current_iteration = checkpoint['iteration']
+            self.model.load_state_dict(checkpoint['state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer'])
+
+            logger.info("Checkpoint loaded successfully from '{}' at (epoch {}) at (iteration {})\n"
+                  .format(self.args.checkpoint_dir, checkpoint['epoch'], checkpoint['iteration']))
+        except OSError as e:
+            logger.info("No checkpoint exists from '{}'. Skipping...".format(self.args.checkpoint_dir))
+            logger.info("**First time to train**")
 
 
 

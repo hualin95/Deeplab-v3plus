@@ -13,6 +13,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
 from torch.nn import init
+from torchsummary import summary
 
 
 pretrained_settings = {
@@ -113,7 +114,7 @@ class Xception(nn.Module):
     https://arxiv.org/pdf/1610.02357.pdf
     """
 
-    def __init__(self):
+    def __init__(self, num_classes):
         super(Xception, self).__init__()
 
         self.conv1 = nn.Conv2d(3, 32, 3, 2, 0, bias=False)
@@ -197,7 +198,7 @@ class Xception(nn.Module):
 
         x = F.adaptive_avg_pool2d(x, (1, 1))
         x = x.view(x.size(0), -1)
-        x = self.last_linear(x)
+        x = self.fc(x)
         return x
 
     def forward(self, input):
@@ -227,6 +228,12 @@ def xception(num_classes=1000, pretrained='imagenet'):
     del model.fc
     return model
 
+if __name__ == "__main__":
+    model = Xception(21)
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # model = model.to(device)
+    # summary(model, (3, 512, 512))
+    print(model)
 
 
 
