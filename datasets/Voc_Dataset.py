@@ -17,9 +17,8 @@ import torchvision.transforms as transforms
 
 
 
-
 class Voc_Dataset(data.Dataset):
-    def __init__(self, root_path='/data/linhua/VOCdevkit', dataset='voc2012', image_size=512, is_training=True,
+    def __init__(self, root_path='/data/linhua/VOCdevkit', dataset='voc2012_aug', image_size=512, is_training=True,
                  image_transforms=None, gt_image_transforms=None):
         """
 
@@ -29,6 +28,7 @@ class Voc_Dataset(data.Dataset):
         :param is_trainging:
         :param transforms:
         """
+        self.mean = [122.675, 116.669, 104.008]
         self.dataset = dataset
         self.is_training = is_training
         if self.dataset == 'voc2007':
@@ -45,26 +45,26 @@ class Voc_Dataset(data.Dataset):
             else:
                 item_list_filepath = os.path.join(self.data_path, "ImageSets/Segmentation/val.txt")
 
-        elif self.dataset == 'bsd':
-            self.data_path = os.path.join(root_path, "BSD")
+        elif self.dataset == 'voc2012_aug':
+            self.data_path = os.path.join(root_path, "VOC2012")
             if is_training:
-                item_list_filepath = os.path.join(self.data_path, "dataset/train.txt")
+                item_list_filepath = os.path.join(self.data_path, "ImageSets/Segmentation/train_aug.txt")
             else:
-                item_list_filepath = os.path.join(self.data_path, "dataset/val.txt")
+                item_list_filepath = os.path.join(self.data_path, "ImageSets/Segmentation/val_aug.txt")
 
         else:
-            raise Warning("dataset must be voc2007 or voc2012 or bsd")
+            raise Warning("dataset must be voc2007 or voc2012 or voc2012_aug")
+
+        self.image_filepath = os.path.join(self.data_path, "JPEGImages")
 
         if self.dataset == 'voc2007' or self.dataset == 'voc2012':
-            self.image_filepath = os.path.join(self.data_path, "JPEGImages")
             self.gt_filepath = os.path.join(self.data_path, "SegmentationClass")
 
-        elif self.dataset == 'bsd':
-            self.image_filepath = os.path.join(self.data_path, "dataset/img")
-            self.gt_filepath = os.path.join(self.data_path, "dataset/cls_png")
+        elif self.dataset == 'voc2012_aug':
+            self.gt_filepath = os.path.join(self.data_path, "SegmentationClassAug")
 
         else:
-            raise Warning("dataset must be voc2007 or voc2012 or bsd")
+            raise Warning("dataset must be voc2007 or voc2012 or voc2012_aug")
 
         self.items = [id.strip() for id in open(item_list_filepath)]
         self.classes = ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow',
@@ -77,9 +77,9 @@ class Voc_Dataset(data.Dataset):
 
     def __getitem__(self, item):
         id = self.items[item]
-        if self.dataset == 'bsd':
+        if self.dataset == 'voc2012_aug':
             gt_image_path = os.path.join(self.gt_filepath, "{}.png".format(id))
-            gt_image = Image.open(gt_image_path)
+            gt_image = Image.open(gt_image_path).convert('L')
         else:
             gt_image_path = os.path.join(self.gt_filepath, "{}.png".format(id))
             gt_image = Image.open(gt_image_path).convert('P')
@@ -87,6 +87,8 @@ class Voc_Dataset(data.Dataset):
         image_path = os.path.join(self.image_filepath, "{}.jpg".format(id))
         image = Image.open(image_path).convert("RGB")
 
+        image_np = np.array(image, dtype='float64')
+        image_np -= self.mean
         if transforms:
             image = self.im_transforms(image)
             gt_image =self.gt_transforms(gt_image)
@@ -99,14 +101,11 @@ class Voc_Dataset(data.Dataset):
 
 class VOCDataLoader():
     def __init__(self, config):
-        mean_std = ([122.675, 116.669, 104.008], [1.0, 1.0, 1.0])
 
         self.config = config
         self.transform_image = transforms.Compose([
             transforms.Resize((512, 512), interpolation=PIL.Image.BILINEAR),
-            transforms.ToTensor(),
-            transforms.Lambda(lambda x: x.mul_(255)),
-            transforms.Normalize(*mean_std)
+            transforms.ToTensor()
         ])
 
         self.transform_gt = transforms.Compose([
@@ -114,7 +113,7 @@ class VOCDataLoader():
             transforms.ToTensor()
         ])
 
-        train_set = Voc_Dataset(dataset='bsd', image_transforms=self.transform_image, gt_image_transforms=self.transform_gt)
+        train_set = Voc_Dataset(dataset='voc2012', image_transforms=self.transform_image, gt_image_transforms=self.transform_gt)
         val_set = Voc_Dataset(dataset='voc2012', is_training=False, image_transforms=self.transform_image,
                               gt_image_transforms=self.transform_gt)
 

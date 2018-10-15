@@ -424,10 +424,12 @@ if __name__ == "__main__":
     model = DeepLabv3_plus(nInputChannels=3, n_classes=21, os=16, pretrained=True, _print=True)
     model.eval()
     image = torch.randn(1, 3, 512, 512)
-    with torch.no_grad():
-        output = model.forward(image)
-    print(output.size())
-    print(model)
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    # model = model.to(device)
-    # summary(model, (3, 512, 512))
+    # with torch.no_grad():
+    #     output = model.forward(image)
+    # print(output.size())
+    # print(model)
+    print(torch.cuda.is_available())
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    model = model.to(device)
+    summary(model, (3, 512, 512))

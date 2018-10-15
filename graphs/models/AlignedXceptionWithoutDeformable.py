@@ -111,12 +111,12 @@ class Xception(nn.Module):
     def __init__(self, output_stride, pretrained=True):
         super(Xception, self).__init__()
 
-        if output_stride ==16:
+        if output_stride ==8:
             entry_block3_stride = 1
             middle_block_rate = 2  # ! Not mentioned in paper, but required
             exit_block_rates = (2, 4)
             # atrous_rates = (12, 24, 36)
-        elif output_stride == 8:
+        elif output_stride == 16:
             entry_block3_stride = 2
             middle_block_rate = 1
             exit_block_rates = (1, 2)
@@ -156,7 +156,7 @@ class Xception(nn.Module):
         self.block18 = Block(728, 728, 3, 1, start_with_relu=True, grow_first=True, dilation=middle_block_rate)
         self.block19 = Block(728, 728, 3, 1, start_with_relu=True, grow_first=True, dilation=middle_block_rate)
 
-        self.block20 = Block(728, 1024, 3, 2, start_with_relu=True, grow_first=False, dilation=exit_block_rates[0])
+        self.block20 = Block(728, 1024, 3, 1, start_with_relu=True, grow_first=False, dilation=exit_block_rates[0])
 
         self.conv3 = SeparableConv2d(1024, 1536, kernel_size=3, stride=1, dilation=exit_block_rates[1])
         self.bn3 = nn.BatchNorm2d(1536)
@@ -270,14 +270,15 @@ class Xception(nn.Module):
                 m.bias.data.zero_()
         #-----------------------------
 if __name__ == '__main__':
-    model = Xception(output_stride=16, pretrained=True)
+    model = Xception(output_stride=16, pretrained=False)
     # print(model.state_dict)
     model.eval()
     image = torch.randn(1, 3, 512, 512)
-    with torch.no_grad():
-        output, low_l_f = model.forward(image)
-    print(low_l_f.size())
-    print(model)
+    # with torch.no_grad():
+    #    output, low_l_f = model.forward(image)
+    # print(low_l_f.size())
+    # print(model)
+    print(torch.cuda.is_available())
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model =model.to(device)
     summary(model,(3, 512, 512))

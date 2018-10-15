@@ -27,6 +27,7 @@ sys.path.append(os.path.abspath('..'))
 from utils.data_utils import calculate_weigths_labels
 from utils.eval_2 import Eval
 from utils.eval_3 import scores
+from graphs.models.decoder import DeepLab
 from graphs.models.resnet101 import DeepLabv3_plus
 from datasets.Voc_Dataset import VOCDataLoader
 from configs.global_config import cfg
@@ -48,13 +49,14 @@ config = ConfigParser()
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-fh = logging.FileHandler('logger.txt')
+fh = logging.FileHandler('logger1.txt')
 ch = logging.StreamHandler()
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
 ch.setFormatter(formatter)
 logger.addHandler(fh)
 logger.addHandler(ch)
+
 
 class Trainer():
     def __init__(self, args, config, cuda=None):
@@ -79,6 +81,7 @@ class Trainer():
         # loss definition
         if args.loss_weight:
             if not os.path.isfile(self.config.classes_weight):
+                logger.info('calculating class weights...')
                 calculate_weigths_labels(self.config)
             class_weights = np.load(self.config.class_weights)
             weight = torch.from_numpy(class_weights.astype(np.float32))
@@ -89,7 +92,7 @@ class Trainer():
         self.loss.to(self.device)
 
         # model
-        self.model = DeepLabv3_plus(nInputChannels=3, n_classes=21, os=16, pretrained=True, _print=True)
+        self.model = DeepLab(16, class_num=21, pretrained=True)
         self.model = nn.DataParallel(self.model)
         self.model.to(self.device)
 
@@ -102,16 +105,36 @@ class Trainer():
                                           dampening=self.config.dampening,
                                           weight_decay=self.config.weight_decay,
                                           nesterov=self.config.nesterov)
-
+        self.optimizer = torch.optim.SGD(
+            # cf lr_mult and decay_mult in train.prototxt
+            params=[
+                {
+                    "params": self.get_params(self.model.module, key="1x"),
+                    "lr": self.config.lr,
+                    "weight_decay": self.config.weight_decay,
+                },
+                {
+                    "params": self.get_params(self.model.module, key="10x"),
+                    "lr": 10 * self.config.lr,
+                    "weight_decay": self.config.weight_decay,
+                },
+                {
+                    "params": self.get_params(self.model.module, key="20x"),
+                    "lr": 20 * self.config.lr,
+                    "weight_decay": 0.0,
+                },
+            ],
+            momentum=self.config.momentum,
+        )
         # dataloader
         self.dataloader = VOCDataLoader(self.config)
 
         # lr_scheduler
-        lambda1 = lambda epoch: pow((1 - ((epoch - 1) / self.config.epoch_num)), 0.9)
+        # lambda1 = lambda epoch: pow((1 - ((epoch - 1) / self.config.epoch_num)), 0.9)
         # self.scheduler = lr_scheduler.LambdaLR(self.optimizer, lr_lambda=lambda1)
-        self.scheduler = lr_scheduler.StepLR(optimizer=self.optimizer,
-                                             step_size=self.config.step_size,
-                                             gamma=self.config.gamma)
+        # self.scheduler = lr_scheduler.StepLR(optimizer=self.optimizer,
+        #                                      step_size=self.config.step_size,
+        #                                      gamma=self.config.gamma)
 
         # self.load_checkpoint(self.config.checkpoint_file)
 
@@ -155,7 +178,11 @@ class Trainer():
             is_best = MIoU > self.best_MIou
             if is_best:
                 self.best_MIou = MIoU
-            self.save_checkpoint(is_best, str(self.current_epoch)+'.pth')
+            self.save_checkpoint(is_best, 'bestper.pth')
+
+            if self.current_iter >= self.config.iter_max:
+                logger.info("iteration arrive 10000!")
+                break
             # writer.add_scalar('PA', PA)
             # print(PA)
 
@@ -165,13 +192,24 @@ class Trainer():
         tqdm_epoch = tqdm(self.dataloader.train_loader, total=self.dataloader.train_iterations,
                           desc="Train Epoch-{}-".format(self.current_epoch+1))
         # Set the model to be in training mode (for batchnorm)
+
         train_loss = []
         self.model.train()
         # Initialize your average meters
 
         batch_idx = 0
         for x, y, _ in tqdm_epoch:
-            self.scheduler.step()
+            self.current_iter += 1
+
+            self.poly_lr_scheduler(
+                optimizer=self.optimizer,
+                init_lr=self.config.lr,
+                iter=self.current_iter,
+                lr_decay_iter=self.config.lr_decay,
+                max_iter=self.config.iter_max,
+                power=self.config.poly_power,
+            )
+
             # y.to(torch.long)
             if self.cuda:
                 x, y = x.to(self.device), y.to(device=self.device, dtype=torch.long)
@@ -192,7 +230,7 @@ class Trainer():
             cur_loss.backward()
             self.optimizer.step()
             train_loss.append(cur_loss.item())
-            self.current_iter += 1
+
             if batch_idx % self.config.batch_save ==0:
                 tqdm.write("The loss of epoch{}-batch-{}:{}".format(self.current_epoch, batch_idx, cur_loss.item()))
             batch_idx += 1
@@ -327,6 +365,35 @@ class Trainer():
         except OSError as e:
             logger.info("No checkpoint exists from '{}'. Skipping...".format(self.args.checkpoint_dir))
             logger.info("**First time to train**")
+
+    def get_params(self, model, key):
+        # For Dilated CNN
+        if key == "1x":
+            for m in model.named_modules():
+                if "Resnet101" in m[0]:
+                    if isinstance(m[1], nn.Conv2d):
+                        for p in m[1].parameters():
+                            yield p
+        # For conv weight in the ASPP module
+        if key == "10x":
+            for m in model.named_modules():
+                if "ASPP" in m[0] or "decoder" in m[0]:
+                    if isinstance(m[1], nn.Conv2d):
+                        yield m[1].weight
+        # For conv bias in the ASPP module
+        if key == "20x":
+            for m in model.named_modules():
+                if "ASPP" in m[0] or "decoder" in m[0]:
+                    if isinstance(m[1], nn.Conv2d):
+                        yield m[1].bias
+
+    def poly_lr_scheduler(self, optimizer, init_lr, iter, lr_decay_iter, max_iter, power):
+        if iter % lr_decay_iter or iter > max_iter:
+            return None
+        new_lr = init_lr * (1 - float(iter) / max_iter) ** power
+        optimizer.param_groups[0]["lr"] = new_lr
+        optimizer.param_groups[1]["lr"] = 10 * new_lr
+        optimizer.param_groups[2]["lr"] = 20 * new_lr
 
 
 

@@ -7,6 +7,7 @@
 
 import numpy as np
 from datasets.Voc_Dataset import VOCDataLoader
+
 def calculate_weigths_labels(config):
     # Create an instance from the data loader
     from tqdm import tqdm
@@ -28,5 +29,5 @@ def calculate_weigths_labels(config):
         class_weight = 1 / (np.log(1.02 + (frequency / total_frequency)))
         class_weights.append(class_weight)
     ret = np.array(class_weights)
-    np.save('/data2/linhua/VOCdevkit/pretrained_weights/voc2012_256_class_weights', ret)
+    np.save('/data/linhua/VOCdevkit/pretrained_weights/voc2012_256_class_weights', ret)
     print(ret)

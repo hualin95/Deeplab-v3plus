@@ -230,9 +230,9 @@ def xception(num_classes=1000, pretrained='imagenet'):
 
 if __name__ == "__main__":
     model = Xception(21)
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    # model = model.to(device)
-    # summary(model, (3, 512, 512))
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = model.to(device)
+    summary(model, (3, 512, 512))
     print(model)
 
 

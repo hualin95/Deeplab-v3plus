@@ -14,6 +14,7 @@ import sys
 sys.path.append(os.path.abspath('..'))
 
 from graphs.models.AlignedXceptionWithoutDeformable import Xception
+from graphs.models.resnet101 import ResNet101
 
 class AsppModule(nn.Module):
     def __init__(self, output_stride=16):
@@ -68,17 +69,18 @@ class AsppModule(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, pretrained):
+    def __init__(self, output_stride=16, pretrained=False):
         super(Encoder, self).__init__()
-        self.Xception = Xception(output_stride = 16, pretrained=pretrained)
+        #self.Xception = Xception(output_stride = 16, pretrained=pretrained)
+        self.Resnet101 = ResNet101(os=output_stride, pretrained=pretrained)
         # output_stride parameter
-        self.ASPP = AsppModule(output_stride=16)
+        self.ASPP = AsppModule(output_stride=output_stride)
         self.conv1 = nn.Conv2d(256*5, 256, kernel_size=1)
         self.bn1 = nn.BatchNorm2d(256)
         self.relu1 = nn.ReLU()
 
     def forward(self, input):
-        input, low_level_features = self.Xception(input)
+        input, low_level_features = self.Resnet101(input)
         input = self.ASPP(input)
         input = self.conv1(input)
         input = self.bn1(input)
