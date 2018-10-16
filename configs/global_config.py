@@ -8,17 +8,19 @@
 from easydict import EasyDict as edict
 cfg = edict()
 
+# dataset
+cfg.dataset = "voc2012_aug"
 cfg.num_classes = 21
 # cfg.classes_weight = True
 
 
-cfg.classes_weight = 'F:/projects/Deeplab v3plus/pretrained_weights/voc2012_256_class_weights'
+cfg.classes_weight = '/data/linhua/VOCdevkit/pretrained_weights/'
 #'/data2/linhua/VOCdevkit/pretrained_weights/voc2012_256_class_weights'
 cfg.data_loader_workers = 4
 cfg.pin_memory = True
 
 cfg.batch_size = 10
-cfg.epoch_num = 30
+cfg.epoch_num = 60
 cfg.batch_save = 50
 
 # Nesterov Momentum
@@ -34,7 +36,7 @@ cfg.weight_decay = 4e-5
 # train protocol
 cfg.bn_decay = 0.9997
 cfg.lr_decay = 10
-cfg.iter_max = 20000
+cfg.iter_max = 40000
 cfg.poly_power = 0.9
 
 
@@ -42,6 +44,5 @@ cfg.poly_power = 0.9
 cfg.step_size = 30000
 cfg.gamma = 0.1
 
-cfg.pretrained = False
 
-cfg.checkpoint_file = '59.pth'
+cfg.checkpoint_file = 'bestper.pth'

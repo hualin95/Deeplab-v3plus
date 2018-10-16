@@ -87,12 +87,23 @@ class Voc_Dataset(data.Dataset):
         image_path = os.path.join(self.image_filepath, "{}.jpg".format(id))
         image = Image.open(image_path).convert("RGB")
 
+        # image, gt_image = self.joint_transforms(image, gt_image)
+
         image_np = np.array(image, dtype='float64')
         image_np -= self.mean
-        if transforms:
-            image = self.im_transforms(image)
-            gt_image =self.gt_transforms(gt_image)
+        image = Image.fromarray(np.uint8(image_np))
+
+        image = self.im_transforms(image)
+        gt_image =self.gt_transforms(gt_image)
         return image, gt_image, id
+
+    # def joint_transforms(self, image, label):
+    #     # if self.config.data_aug == True:
+    #     if np.random.rand() > 0.5:
+    #         image = transforms.functional.hflip(image)
+    #         label = transforms.functional.hflip(label)
+    #
+    #     return image, label
 
 
 
@@ -113,8 +124,9 @@ class VOCDataLoader():
             transforms.ToTensor()
         ])
 
-        train_set = Voc_Dataset(dataset='voc2012', image_transforms=self.transform_image, gt_image_transforms=self.transform_gt)
-        val_set = Voc_Dataset(dataset='voc2012', is_training=False, image_transforms=self.transform_image,
+
+        train_set = Voc_Dataset(dataset=self.config.dataset, image_transforms=self.transform_image, gt_image_transforms=self.transform_gt)
+        val_set = Voc_Dataset(dataset=self.config.dataset, is_training=False, image_transforms=self.transform_image,
                               gt_image_transforms=self.transform_gt)
 
         self.train_loader = data.DataLoader(train_set, batch_size=self.config.batch_size, shuffle=True,
@@ -125,6 +137,9 @@ class VOCDataLoader():
                                        pin_memory=self.config.pin_memory)
         self.train_iterations = (len(train_set) + self.config.batch_size) // self.config.batch_size
         self.valid_iterations = (len(val_set) + self.config.batch_size) // self.config.batch_size
+
+
+
 
 
 if __name__ == '__main__':

@@ -43,6 +43,7 @@ arg_parser.add_argument('--data_root_path', default="/data/linhua/VOCdevkit/")
 arg_parser.add_argument('--result_filepath', default="/data/linhua/VOCdevkit/VOC2012/Results/")
 arg_parser.add_argument('--store_result', default=True)
 arg_parser.add_argument('--checkpoint_dir', default=os.path.abspath('..')+"/checkpoints/")
+arg_parser.add_argument('--pretrained', default=False)
 
 
 config = ConfigParser()
@@ -80,10 +81,13 @@ class Trainer():
 
         # loss definition
         if args.loss_weight:
-            if not os.path.isfile(self.config.classes_weight):
+            classes_weights_path = os.path.join(self.config.classes_weight, self.config.dataset + 'classes_weights.npy')
+            print(classes_weights_path)
+            if not os.path.isfile(classes_weights_path):
                 logger.info('calculating class weights...')
                 calculate_weigths_labels(self.config)
-            class_weights = np.load(self.config.class_weights)
+            class_weights = np.load(classes_weights_path)
+            pprint.pprint(class_weights)
             weight = torch.from_numpy(class_weights.astype(np.float32))
         else:
             weight = None
@@ -136,7 +140,7 @@ class Trainer():
         #                                      step_size=self.config.step_size,
         #                                      gamma=self.config.gamma)
 
-        # self.load_checkpoint(self.config.checkpoint_file)
+        #
 
 
 
@@ -149,6 +153,7 @@ class Trainer():
         # display config details
         logger.info("Global configuration as follows:")
         pprint.pprint(self.config)
+        pprint.pprint(self.args)
 
         # choose cuda
         if self.cuda:
@@ -157,6 +162,10 @@ class Trainer():
             logger.info("This model will run on {}".format(torch.cuda.get_device_name(current_device)))
         else:
             logger.info("This model will run on CPU")
+
+        # load pretrained checkpoint
+        if self.args.pretrained:
+            self.load_checkpoint(self.config.checkpoint_file)
 
         # train
         self.train()
@@ -323,7 +332,7 @@ class Trainer():
             # logger.info("The average loss of val loss:{}".format(loss))
 
             score = scores(lab, preds, n_class=21)
-            logger.info(score)
+            # logger.info(score)
             tqdm_batch.close()
 
         return score
@@ -356,7 +365,7 @@ class Trainer():
             checkpoint = torch.load(filename)
 
             self.current_epoch = checkpoint['epoch']
-            self.current_iteration = checkpoint['iteration']
+            self.current_iter = checkpoint['iteration']
             self.model.load_state_dict(checkpoint['state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer'])
 
@@ -404,6 +413,5 @@ class Trainer():
 
 if __name__ == '__main__':
     args = arg_parser.parse_args()
-    config.read("../configs/deeplab.cfg", encoding="UTF-8")
     agent = Trainer(args=args, config=cfg, cuda=True)
     agent.main()
