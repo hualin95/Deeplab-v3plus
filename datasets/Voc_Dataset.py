@@ -6,8 +6,9 @@
 # @Software: PyCharm
 
 import PIL
+import random
 import scipy.io
-from PIL import Image
+from PIL import Image, ImageOps, ImageFilter
 import numpy as np
 import cv2
 import os
@@ -18,19 +19,26 @@ import torchvision.transforms as transforms
 
 
 class Voc_Dataset(data.Dataset):
-    def __init__(self, root_path='/data/linhua/VOCdevkit', dataset='voc2012_aug', image_size=512, is_training=True,
-                 image_transforms=None, gt_image_transforms=None):
+    def __init__(self,
+                 root_path='/data/linhua/VOCdevkit',
+                 dataset='voc2012_aug',
+                 base_size=520,
+                 crop_size=480,
+                 is_training=True):
         """
 
         :param root_path:
         :param dataset:
-        :param image_size:
+        :param base_size:
         :param is_trainging:
         :param transforms:
         """
-        self.mean = [122.675, 116.669, 104.008]
+
         self.dataset = dataset
         self.is_training = is_training
+        self.base_size = base_size
+        self.crop_size = crop_size
+
         if self.dataset == 'voc2007':
             self.data_path = os.path.join(root_path, "VOC2007")
             if is_training:
@@ -70,40 +78,102 @@ class Voc_Dataset(data.Dataset):
         self.classes = ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow',
                         'diningtable', 'dog', 'horse', 'motorbike', 'person', 'pottedplant', 'sheep', 'sofa', 'train',
                         'tvmonitor']
-        self.image_size = image_size
-        self.is_training = is_training
-        self.im_transforms = image_transforms
-        self.gt_transforms = gt_image_transforms
+
 
     def __getitem__(self, item):
         id = self.items[item]
-        if self.dataset == 'voc2012_aug':
-            gt_image_path = os.path.join(self.gt_filepath, "{}.png".format(id))
-            gt_image = Image.open(gt_image_path).convert('L')
-        else:
-            gt_image_path = os.path.join(self.gt_filepath, "{}.png".format(id))
-            gt_image = Image.open(gt_image_path).convert('P')
+
+        gt_image_path = os.path.join(self.gt_filepath, "{}.png".format(id))
+        gt_image = Image.open(gt_image_path)
 
         image_path = os.path.join(self.image_filepath, "{}.jpg".format(id))
         image = Image.open(image_path).convert("RGB")
 
-        # image, gt_image = self.joint_transforms(image, gt_image)
+        if self.is_training:
+            image, gt_image = self._train_sync_transform(image, gt_image)
+        else:
+            image, gt_image = self._val_sync_transform(image, gt_image)
 
-        image_np = np.array(image, dtype='float64')
-        image_np -= self.mean
-        image = Image.fromarray(np.uint8(image_np))
-
-        image = self.im_transforms(image)
-        gt_image =self.gt_transforms(gt_image)
         return image, gt_image, id
 
-    # def joint_transforms(self, image, label):
-    #     # if self.config.data_aug == True:
-    #     if np.random.rand() > 0.5:
-    #         image = transforms.functional.hflip(image)
-    #         label = transforms.functional.hflip(label)
-    #
-    #     return image, label
+    def _train_sync_transform(self, img, mask):
+        '''
+
+        :param image:  PIL input image
+        :param gt_image: PIL input gt_image
+        :return:
+        '''
+        # random mirror
+        if random.random() < 0.5:
+            img = img.transpose(Image.FLIP_LEFT_RIGHT)
+            mask = mask.transpose(Image.FLIP_LEFT_RIGHT)
+        crop_size = self.crop_size
+        # random scale (short edge)
+        short_size = random.randint(int(self.base_size * 0.5), int(self.base_size * 2.0))
+        w, h = img.size
+        if h > w:
+            ow = short_size
+            oh = int(1.0 * h * ow / w)
+        else:
+            oh = short_size
+            ow = int(1.0 * w * oh / h)
+        img = img.resize((ow, oh), Image.BILINEAR)
+        mask = mask.resize((ow, oh), Image.NEAREST)
+        # pad crop
+        if short_size < crop_size:
+            padh = crop_size - oh if oh < crop_size else 0
+            padw = crop_size - ow if ow < crop_size else 0
+            img = ImageOps.expand(img, border=(0, 0, padw, padh), fill=0)
+            mask = ImageOps.expand(mask, border=(0, 0, padw, padh), fill=0)
+        # random crop crop_size
+        w, h = img.size
+        x1 = random.randint(0, w - crop_size)
+        y1 = random.randint(0, h - crop_size)
+        img = img.crop((x1, y1, x1 + crop_size, y1 + crop_size))
+        mask = mask.crop((x1, y1, x1 + crop_size, y1 + crop_size))
+        # gaussian blur as in PSP
+        if random.random() < 0.5:
+            img = img.filter(ImageFilter.GaussianBlur(
+                radius=random.random()))
+        # final transform
+        img, mask = self._img_transform(img), self._mask_transform(mask)
+        return img, mask
+
+    def _val_sync_transform(self, img, mask):
+        outsize = self.crop_size
+        short_size = outsize
+        w, h = img.size
+        if w > h:
+            oh = short_size
+            ow = int(1.0 * w * oh / h)
+        else:
+            ow = short_size
+            oh = int(1.0 * h * ow / w)
+        img = img.resize((ow, oh), Image.BILINEAR)
+        mask = mask.resize((ow, oh), Image.NEAREST)
+        # center crop
+        w, h = img.size
+        x1 = int(round((w - outsize) / 2.))
+        y1 = int(round((h - outsize) / 2.))
+        img = img.crop((x1, y1, x1 + outsize, y1 + outsize))
+        mask = mask.crop((x1, y1, x1 + outsize, y1 + outsize))
+        # final transform
+        img, mask = self._img_transform(img), self._mask_transform(mask)
+        return img, mask
+
+    def _img_transform(self, image):
+        image_transforms = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize([.485, .456, .406], [.229, .224, .225]),
+        ])
+        return image_transforms
+
+    def _mask_transform(self, gt_image):
+        gt_image_transforms = transforms.Compose([
+            transforms.ToTensor(),
+        ])
+        return gt_image_transforms
+
 
 
 
@@ -114,27 +184,29 @@ class VOCDataLoader():
     def __init__(self, config):
 
         self.config = config
-        self.transform_image = transforms.Compose([
-            transforms.Resize((512, 512), interpolation=PIL.Image.BILINEAR),
-            transforms.ToTensor()
-        ])
 
-        self.transform_gt = transforms.Compose([
-            transforms.Resize((512, 512), interpolation=PIL.Image.NEAREST),
-            transforms.ToTensor()
-        ])
+        train_set = Voc_Dataset(dataset=self.config.dataset,
+                                base_size=self.config.base_size,
+                                crop_size=self.config.crop_size,
+                                is_training=True)
+        val_set = Voc_Dataset(dataset=self.config.dataset,
+                              base_size=self.config.base_size,
+                              crop_size=self.config.crop_size,
+                              is_training=False)
 
+        self.train_loader = data.DataLoader(train_set,
+                                            batch_size=self.config.batch_size,
+                                            shuffle=True,
+                                            num_workers=self.config.data_loader_workers,
+                                            pin_memory=self.config.pin_memory,
+                                            drop_last=True)
+        self.valid_loader = data.DataLoader(val_set,
+                                            batch_size=self.config.batch_size,
+                                            shuffle=False,
+                                            num_workers=self.config.data_loader_workers,
+                                            pin_memory=self.config.pin_memory,
+                                            drop_last=True)
 
-        train_set = Voc_Dataset(dataset=self.config.dataset, image_transforms=self.transform_image, gt_image_transforms=self.transform_gt)
-        val_set = Voc_Dataset(dataset=self.config.dataset, is_training=False, image_transforms=self.transform_image,
-                              gt_image_transforms=self.transform_gt)
-
-        self.train_loader = data.DataLoader(train_set, batch_size=self.config.batch_size, shuffle=True,
-                                       num_workers=self.config.data_loader_workers,
-                                       pin_memory=self.config.pin_memory)
-        self.valid_loader = data.DataLoader(val_set, batch_size=self.config.batch_size, shuffle=False,
-                                       num_workers=self.config.data_loader_workers,
-                                       pin_memory=self.config.pin_memory)
         self.train_iterations = (len(train_set) + self.config.batch_size) // self.config.batch_size
         self.valid_iterations = (len(val_set) + self.config.batch_size) // self.config.batch_size
 
