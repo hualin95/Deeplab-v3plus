@@ -29,6 +29,7 @@ from utils.eval_2 import Eval
 from utils.eval_3 import scores
 from graphs.models.decoder import DeepLab
 from graphs.models.resnet101 import DeepLabv3_plus
+from graphs.models.deeplabv3plus import DeepLabV3Plus
 from datasets.Voc_Dataset import VOCDataLoader
 from configs.global_config import cfg
 
@@ -37,7 +38,7 @@ arg_parser = argparse.ArgumentParser()
 
 arg_parser.add_argument('--loss_weight', default=False)
 arg_parser.add_argument('--num_classes', default=21)
-arg_parser.add_argument('--lr', default=0.05)
+# arg_parser.add_argument('--lr', default=0.05)
 arg_parser.add_argument('--imagenet_pretrained', default=True)
 arg_parser.add_argument('--data_root_path', default="/data/linhua/VOCdevkit/")
 arg_parser.add_argument('--result_filepath', default="/data/linhua/VOCdevkit/VOC2012/Results/")
@@ -71,6 +72,8 @@ class Trainer():
         self.epoch_num = self.config.epoch_num
         self.current_iter = 0
 
+        self.writer = SummaryWriter()
+
         # path definition
         self.val_list_filepath = os.path.join(args.data_root_path, 'VOC2012/ImageSets/Segmentation/val.txt')
         self.gt_filepath = os.path.join(args.data_root_path, 'VOC2012/SegmentationClass/')
@@ -96,46 +99,54 @@ class Trainer():
         self.loss.to(self.device)
 
         # model
-        self.model = DeepLab(16, class_num=21, pretrained=True)
+        # self.model = DeepLab(16, class_num=21, pretrained=True)
+        self.model = DeepLabV3Plus(n_classes=21,
+                                   n_blocks=[3, 4, 23, 3],
+                                   pyramids=[6, 12, 18],
+                                   grids=[1, 2, 4],
+                                   output_stride=16,)
         self.model = nn.DataParallel(self.model)
         self.model.to(self.device)
 
 
         # optimizer
         self.optimizer = torch.optim.SGD(params=self.model.parameters(),
-                                          #lr=self.config['model']['lr'],
-                                          lr=args.lr,
+                                          lr=self.config.lr,
                                           momentum=self.config.momentum,
-                                          dampening=self.config.dampening,
+                                          # dampening=self.config.dampening,
                                           weight_decay=self.config.weight_decay,
                                           nesterov=self.config.nesterov)
-        self.optimizer = torch.optim.SGD(
-            # cf lr_mult and decay_mult in train.prototxt
-            params=[
-                {
-                    "params": self.get_params(self.model.module, key="1x"),
-                    "lr": self.config.lr,
-                    "weight_decay": self.config.weight_decay,
-                },
-                {
-                    "params": self.get_params(self.model.module, key="10x"),
-                    "lr": 10 * self.config.lr,
-                    "weight_decay": self.config.weight_decay,
-                },
-                {
-                    "params": self.get_params(self.model.module, key="20x"),
-                    "lr": 20 * self.config.lr,
-                    "weight_decay": 0.0,
-                },
-            ],
-            momentum=self.config.momentum,
-        )
+        # self.optimizer = torch.optim.SGD(
+        #     # cf lr_mult and decay_mult in train.prototxt
+        #     params=[
+        #         {
+        #             "params": self.get_params(self.model.module, key="1x"),
+        #             "lr": self.config.lr,
+        #             "weight_decay": self.config.weight_decay,
+        #         },
+        #         {
+        #             "params": self.get_params(self.model.module, key="10x"),
+        #             "lr": 10 * self.config.lr,
+        #             "weight_decay": self.config.weight_decay,
+        #         },
+        #         {
+        #             "params": self.get_params(self.model.module, key="20x"),
+        #             "lr": 20 * self.config.lr,
+        #             "weight_decay": 0.0,
+        #         },
+        #     ],
+        #     momentum=self.config.momentum,
+        #     # dampening=self.config.dampening,
+        #     weight_decay=self.config.weight_decay,
+        #     nesterov=self.config.nesterov
+        # )
         # dataloader
         self.dataloader = VOCDataLoader(self.config)
 
+
         # lr_scheduler
-        # lambda1 = lambda epoch: pow((1 - ((epoch - 1) / self.config.epoch_num)), 0.9)
-        # self.scheduler = lr_scheduler.LambdaLR(self.optimizer, lr_lambda=lambda1)
+        lambda1 = lambda epoch: pow((1 - ((epoch - 1) / self.config.epoch_num)), 0.9)
+        self.scheduler = lr_scheduler.LambdaLR(self.optimizer, lr_lambda=lambda1)
         # self.scheduler = lr_scheduler.StepLR(optimizer=self.optimizer,
         #                                      step_size=self.config.step_size,
         #                                      gamma=self.config.gamma)
@@ -148,7 +159,7 @@ class Trainer():
 
     def main(self):
         # set TensorboardX
-        writer = SummaryWriter()
+
 
         # display config details
         logger.info("Global configuration as follows:")
@@ -170,12 +181,13 @@ class Trainer():
         # train
         self.train()
 
-        writer.close()
+        self.writer.close()
 
     def train(self):
         for epoch in tqdm(range(self.current_epoch, self.epoch_num),
                           desc="Total {} epochs".format(self.config.epoch_num)):
             self.current_epoch = epoch
+            self.scheduler.step(epoch)
             self.train_one_epoch()
 
             # validate
@@ -184,6 +196,10 @@ class Trainer():
             PA, MPA, MIoU, FWIoU = score.values()
             logger.info("PA:{}, MPA:{}, MIou:{}, FWIoU:{}".format(PA, MPA, MIoU, FWIoU))
 
+            self.writer.add_scalar('PA', PA, self.current_epoch)
+            self.writer.add_scalar('MPA', MPA, self.current_epoch)
+            self.writer.add_scalar('MIoU', MIoU, self.current_epoch)
+            self.writer.add_scalar('FWIoU', FWIoU, self.current_epoch)
             is_best = MIoU > self.best_MIou
             if is_best:
                 self.best_MIou = MIoU
@@ -200,6 +216,7 @@ class Trainer():
     def train_one_epoch(self):
         tqdm_epoch = tqdm(self.dataloader.train_loader, total=self.dataloader.train_iterations,
                           desc="Train Epoch-{}-".format(self.current_epoch+1))
+        logger.info("Training one epoch...")
         # Set the model to be in training mode (for batchnorm)
 
         train_loss = []
@@ -210,14 +227,17 @@ class Trainer():
         for x, y, _ in tqdm_epoch:
             self.current_iter += 1
 
-            self.poly_lr_scheduler(
-                optimizer=self.optimizer,
-                init_lr=self.config.lr,
-                iter=self.current_iter,
-                lr_decay_iter=self.config.lr_decay,
-                max_iter=self.config.iter_max,
-                power=self.config.poly_power,
-            )
+            # self.poly_lr_scheduler(
+            #     optimizer=self.optimizer,
+            #     init_lr=self.config.lr,
+            #     iter=self.current_iter,
+            #     lr_decay_iter=self.config.lr_decay,
+            #     max_iter=self.config.iter_max,
+            #     power=self.config.poly_power,
+            # )
+            # self.writer.add_scalar('learning_rate', self.optimizer.param_groups[0]["lr"], self.current_iter)
+            # self.writer.add_scalar('learning_rate_10x', self.optimizer.param_groups[1]["lr"], self.current_iter)
+            # self.writer.add_scalar('learning_rate_20x', self.optimizer.param_groups[2]["lr"], self.current_iter)
 
             # y.to(torch.long)
             if self.cuda:
@@ -227,6 +247,7 @@ class Trainer():
             # model
             pred = self.model(x)
             y = torch.squeeze(y, 1)
+            # pred_s = F.softmax(pred, dim=1)
             # loss
             cur_loss = self.loss(pred, y)
 
@@ -244,8 +265,9 @@ class Trainer():
                 tqdm.write("The loss of epoch{}-batch-{}:{}".format(self.current_epoch, batch_idx, cur_loss.item()))
             batch_idx += 1
 
-        loss = sum(train_loss)/len(train_loss)
-        tqdm.write("The average loss of train epoch-{}-:{}".format(self.current_epoch, loss))
+        tr_loss = sum(train_loss)/len(train_loss)
+        self.writer.add_scalar('train_loss', tr_loss, self.current_epoch)
+        tqdm.write("The average loss of train epoch-{}-:{}".format(self.current_epoch, tr_loss))
         tqdm_epoch.close()
 
     def validate(self):
@@ -291,6 +313,7 @@ class Trainer():
         return PA, MPA, MIoU, FWIoU
 
     def validate_3(self):
+        logger.info('validating one epoch...')
         with torch.no_grad():
             tqdm_batch = tqdm(self.dataloader.valid_loader, total=self.dataloader.valid_iterations,
                               desc="Val Epoch-{}-".format(self.current_epoch + 1))
@@ -302,21 +325,22 @@ class Trainer():
             for x, y, id in tqdm_batch:
                 # y.to(torch.long)
                 if self.cuda:
-                    x = x.to(self.device)
+                    x, y = x.to(self.device), y.to(device=self.device, dtype=torch.long)
 
                 # model
                 pred = self.model(x)
                 y = torch.squeeze(y, 1)
-                # cur_loss = self.loss(pred, y)
+                # pred_s = F.softmax(pred, dim = 1)
+                cur_loss = self.loss(pred, y)
                 # print(cur_loss)
-                # if np.isnan(float(cur_loss.item())):
-                #     raise ValueError('Loss is nan during training...')
+                if np.isnan(float(cur_loss.item())):
+                    raise ValueError('Loss is nan during validating...')
 
-                # val_loss.append(cur_loss.item())
-                # pred = F.softmax(pred, dim = 1)
+                val_loss.append(cur_loss.item())
+
                 pred = pred.data.cpu().numpy()
                 argpred = np.argmax(pred, axis=1)
-                lab += list (y.numpy())
+                lab += list (y.cpu().numpy())
                 preds += list (argpred)
 
                 if self.args.store_result == True and self.current_epoch == 20:
@@ -328,8 +352,9 @@ class Trainer():
                         # logger.info("shape:{}".format(result.getpixel((1,1))))
                         result.save(self.args.result_filepath + id[i] + '.png')
 
-            # loss = sum(val_loss) / len(val_loss)
-            # logger.info("The average loss of val loss:{}".format(loss))
+            v_loss = sum(val_loss) / len(val_loss)
+            logger.info("The average loss of val loss:{}".format(v_loss))
+            self.writer.add_scalar('val_loss', v_loss, self.current_epoch)
 
             score = scores(lab, preds, n_class=21)
             # logger.info(score)
@@ -351,9 +376,10 @@ class Trainer():
             'iteration': self.current_iter,
             'state_dict': self.model.state_dict(),
             'optimizer': self.optimizer.state_dict(),
+            'best_MIou:':self.best_MIou
         }
         if is_best:
-            logger.info("=>saving a new best checkpoint.ing...")
+            logger.info("=>saving a new best checkpoint...")
             torch.save(state, filename)
         else:
             logger.info("=> The MIoU of val does't improve.")
@@ -368,9 +394,11 @@ class Trainer():
             self.current_iter = checkpoint['iteration']
             self.model.load_state_dict(checkpoint['state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer'])
+            self.best_MIou = checkpoint['best_MIou']
 
-            logger.info("Checkpoint loaded successfully from '{}' at (epoch {}) at (iteration {})\n"
-                  .format(self.args.checkpoint_dir, checkpoint['epoch'], checkpoint['iteration']))
+            logger.info("Checkpoint loaded successfully from '{}' at (epoch {}) at (iteration {},MIoU:{})\n"
+                  .format(self.args.checkpoint_dir, checkpoint['epoch'], checkpoint['iteration'],
+                          checkpoint['best_MIou']))
         except OSError as e:
             logger.info("No checkpoint exists from '{}'. Skipping...".format(self.args.checkpoint_dir))
             logger.info("**First time to train**")
@@ -379,26 +407,26 @@ class Trainer():
         # For Dilated CNN
         if key == "1x":
             for m in model.named_modules():
-                if "Resnet101" in m[0]:
+                if "layer" in m[0]:
                     if isinstance(m[1], nn.Conv2d):
                         for p in m[1].parameters():
                             yield p
         # For conv weight in the ASPP module
         if key == "10x":
             for m in model.named_modules():
-                if "ASPP" in m[0] or "decoder" in m[0]:
+                if "aspp" in m[0] :
                     if isinstance(m[1], nn.Conv2d):
                         yield m[1].weight
         # For conv bias in the ASPP module
         if key == "20x":
             for m in model.named_modules():
-                if "ASPP" in m[0] or "decoder" in m[0]:
+                if "aspp" in m[0] :
                     if isinstance(m[1], nn.Conv2d):
                         yield m[1].bias
 
     def poly_lr_scheduler(self, optimizer, init_lr, iter, lr_decay_iter, max_iter, power):
-        if iter % lr_decay_iter or iter > max_iter:
-            return None
+        # if iter % lr_decay_iter or iter > max_iter:
+        #     return None
         new_lr = init_lr * (1 - float(iter) / max_iter) ** power
         optimizer.param_groups[0]["lr"] = new_lr
         optimizer.param_groups[1]["lr"] = 10 * new_lr

@@ -57,6 +57,8 @@ class AsppModule(nn.Module):
             nn.ReLU()
         )
 
+        self.__init_weight()
+
     def forward(self, input):
         input1 = self._atrous_convolution1(input)
         input2 = self._atrous_convolution2(input)
@@ -66,6 +68,16 @@ class AsppModule(nn.Module):
         input5 = F.interpolate(input=input5, size=input4.size()[2:3], mode='bilinear', align_corners=True)
 
         return torch.cat((input1, input2, input3, input4, input5), dim=1)
+
+    def __init_weight(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                # n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                # m.weight.data.normal_(0, math.sqrt(2. / n))
+                torch.nn.init.kaiming_normal_(m.weight)
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
 
 
 class Encoder(nn.Module):
@@ -79,6 +91,8 @@ class Encoder(nn.Module):
         self.bn1 = nn.BatchNorm2d(256)
         self.relu1 = nn.ReLU()
 
+        self.__init_weight()
+
     def forward(self, input):
         input, low_level_features = self.Resnet101(input)
         input = self.ASPP(input)
@@ -86,6 +100,16 @@ class Encoder(nn.Module):
         input = self.bn1(input)
         input = self.relu1(input)
         return input, low_level_features
+
+    def __init_weight(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                # n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                # m.weight.data.normal_(0, math.sqrt(2. / n))
+                torch.nn.init.kaiming_normal_(m.weight)
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
 
 if __name__ =="__main__":
     model = Encoder()

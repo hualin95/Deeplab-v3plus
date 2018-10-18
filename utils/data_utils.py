@@ -35,7 +35,7 @@ def calculate_weigths_labels(config):
     print(total_frequency)
     class_weights = []
     for frequency in z:
-        class_weight = 1 / (np.log(1.02 + (frequency / total_frequency)))
+        class_weight = 1 / (frequency / total_frequency)
         class_weights.append(class_weight)
     ret = np.array(class_weights)
     classes_weights_path = os.path.join('/data/linhua/VOCdevkit/pretrained_weights',config.dataset+'classes_weights')

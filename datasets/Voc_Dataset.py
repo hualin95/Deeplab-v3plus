@@ -14,7 +14,7 @@ import cv2
 import os
 import torch
 import torch.utils.data as data
-import torchvision.transforms as transforms
+import torchvision.transforms as ttransforms
 
 
 
@@ -162,17 +162,19 @@ class Voc_Dataset(data.Dataset):
         return img, mask
 
     def _img_transform(self, image):
-        image_transforms = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize([.485, .456, .406], [.229, .224, .225]),
+        image_transforms = ttransforms.Compose([
+            ttransforms.ToTensor(),
+            ttransforms.Normalize([.485, .456, .406], [.229, .224, .225]),
         ])
-        return image_transforms
+        image = image_transforms(image)
+        return image
 
     def _mask_transform(self, gt_image):
-        gt_image_transforms = transforms.Compose([
-            transforms.ToTensor(),
+        gt_image_transforms = ttransforms.Compose([
+            ttransforms.ToTensor(),
         ])
-        return gt_image_transforms
+        gt_image = gt_image_transforms(gt_image)
+        return gt_image
 
 
 

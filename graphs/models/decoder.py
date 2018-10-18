@@ -49,11 +49,23 @@ class DeepLab(nn.Module):
         self.encoder = Encoder(output_stide, pretrained)
         self.decoder = Decoder(class_num)
 
+        self._init_weight()
+
     def forward(self, input):
         x, low_level_feature = self.encoder(input)
         output = self.decoder(x, low_level_feature)
 
         return output
+
+    def _init_weight(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                # n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                # m.weight.data.normal_(0, math.sqrt(2. / n))
+                torch.nn.init.kaiming_normal_(m.weight)
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
 
 
 if __name__ =="__main__":

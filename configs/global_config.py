@@ -9,8 +9,10 @@ from easydict import EasyDict as edict
 cfg = edict()
 
 # dataset
-cfg.dataset = "voc2012_aug"
+cfg.dataset = "voc2012"
 cfg.num_classes = 21
+cfg.base_size = 520
+cfg.crop_size = 480
 # cfg.classes_weight = True
 
 
@@ -19,13 +21,13 @@ cfg.classes_weight = '/data/linhua/VOCdevkit/pretrained_weights/'
 cfg.data_loader_workers = 4
 cfg.pin_memory = True
 
-cfg.batch_size = 10
-cfg.epoch_num = 60
-cfg.batch_save = 50
+cfg.batch_size = 8
+cfg.epoch_num = 30
+cfg.batch_save = 200
 
 # Nesterov Momentum
-cfg.lr = 0.01
-cfg.lr_10x = 0.01
+cfg.lr = 0.005
+# cfg.lr_10x = 2.5e-4
 cfg.momentum = 0.9
 cfg.dampening = 0
 cfg.nesterov = True
@@ -36,7 +38,7 @@ cfg.weight_decay = 4e-5
 # train protocol
 cfg.bn_decay = 0.9997
 cfg.lr_decay = 10
-cfg.iter_max = 40000
+cfg.iter_max = 30000
 cfg.poly_power = 0.9
 
 
