@@ -68,6 +68,9 @@ class Eval():
 
         self.confusion_matrix += self.__generate_matrix(gt_image, pre_image)
 
+    def reset(self):
+        self.confusion_matrix = np.zeros((self.num_class,) * 2)
+
 
 
 class Eval_from_filepath():

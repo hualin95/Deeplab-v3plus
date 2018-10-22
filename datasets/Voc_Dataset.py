@@ -65,14 +65,8 @@ class Voc_Dataset(data.Dataset):
 
         self.image_filepath = os.path.join(self.data_path, "JPEGImages")
 
-        if self.dataset == 'voc2007' or self.dataset == 'voc2012':
-            self.gt_filepath = os.path.join(self.data_path, "SegmentationClass")
+        self.gt_filepath = os.path.join(self.data_path, "SegmentationClassAug")
 
-        elif self.dataset == 'voc2012_aug':
-            self.gt_filepath = os.path.join(self.data_path, "SegmentationClassAug")
-
-        else:
-            raise Warning("dataset must be voc2007 or voc2012 or voc2012_aug")
 
         self.items = [id.strip() for id in open(item_list_filepath)]
         self.classes = ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow',
@@ -170,11 +164,9 @@ class Voc_Dataset(data.Dataset):
         return image
 
     def _mask_transform(self, gt_image):
-        gt_image_transforms = ttransforms.Compose([
-            ttransforms.ToTensor(),
-        ])
-        gt_image = gt_image_transforms(gt_image)
-        return gt_image
+        target = np.array(gt_image).astype('int32')
+        target[target == 255] = 0
+        return torch.from_numpy(target)
 
 
 

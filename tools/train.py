@@ -17,6 +17,8 @@ from torch.optim import lr_scheduler
 import argparse
 from tensorboardX import SummaryWriter
 import torchvision.transforms as transforms
+import gluoncv
+import mxnet as mx
 
 from tqdm import tqdm
 from configparser import ConfigParser
@@ -27,7 +29,7 @@ sys.path.append(os.path.abspath('..'))
 from utils.data_utils import calculate_weigths_labels
 from utils.eval_2 import Eval
 from utils.eval_3 import scores
-from graphs.models.decoder import DeepLab
+from graphs.models.decoder import DeepLab, DeepLab_2
 from graphs.models.resnet101 import DeepLabv3_plus
 from graphs.models.deeplabv3plus import DeepLabV3Plus
 from datasets.Voc_Dataset import VOCDataLoader
@@ -60,6 +62,8 @@ logger.addHandler(fh)
 logger.addHandler(ch)
 
 
+
+
 class Trainer():
     def __init__(self, args, config, cuda=None):
         self.args = args
@@ -82,6 +86,10 @@ class Trainer():
         # Metric definition
         self.Eval = Eval(self.config.num_classes)
 
+        self.metric = gluoncv.utils.metrics.SegmentationMetric(self.config.num_classes)
+
+        self.lr = self.config.lr
+
         # loss definition
         if args.loss_weight:
             classes_weights_path = os.path.join(self.config.classes_weight, self.config.dataset + 'classes_weights.npy')
@@ -99,23 +107,24 @@ class Trainer():
         self.loss.to(self.device)
 
         # model
-        # self.model = DeepLab(16, class_num=21, pretrained=True)
-        self.model = DeepLabV3Plus(n_classes=21,
-                                   n_blocks=[3, 4, 23, 3],
-                                   pyramids=[6, 12, 18],
-                                   grids=[1, 2, 4],
-                                   output_stride=16,)
+        self.model = DeepLab_2(16, class_num=21, pretrained=True)
+        # self.model = DeepLabV3Plus(n_classes=21,
+        #                            n_blocks=[3, 4, 23, 3],
+        #                            pyramids=[6, 12, 18],
+        #                            grids=[1, 2, 4],
+        #                            output_stride=16,)
         self.model = nn.DataParallel(self.model)
         self.model.to(self.device)
+
 
 
         # optimizer
         self.optimizer = torch.optim.SGD(params=self.model.parameters(),
                                           lr=self.config.lr,
-                                          momentum=self.config.momentum,
+                                          momentum=self.config.momentum)
                                           # dampening=self.config.dampening,
-                                          weight_decay=self.config.weight_decay,
-                                          nesterov=self.config.nesterov)
+                                          # weight_decay=self.config.weight_decay,
+                                          # nesterov=self.config.nesterov)
         # self.optimizer = torch.optim.SGD(
         #     # cf lr_mult and decay_mult in train.prototxt
         #     params=[
@@ -191,22 +200,36 @@ class Trainer():
             self.train_one_epoch()
 
             # validate
+            # score = self.validate_3()
+            # PA, MPA, MIoU, FWIoU = score.values()
             # PA, MPA, MIoU, FWIoU = self.validate()
-            score = self.validate_3()
-            PA, MPA, MIoU, FWIoU = score.values()
-            logger.info("PA:{}, MPA:{}, MIou:{}, FWIoU:{}".format(PA, MPA, MIoU, FWIoU))
+            PA1, MPA1, MIoU1, FWIoU1, score, PA3, MIoU3 = self.validate_2()
+            PA2, MPA2, MIoU2, FWIoU2 = score.values()
+            # logger.info("PA:{}, MPA:{}, MIou:{}, FWIoU:{}".format(PA, MPA, MIoU, FWIoU))
+            #
+            self.writer.add_scalar('PA1', PA1, self.current_epoch)
+            self.writer.add_scalar('MPA1', MPA1, self.current_epoch)
+            self.writer.add_scalar('MIoU1', MIoU1, self.current_epoch)
+            self.writer.add_scalar('FWIoU1', FWIoU1, self.current_epoch)
 
-            self.writer.add_scalar('PA', PA, self.current_epoch)
-            self.writer.add_scalar('MPA', MPA, self.current_epoch)
-            self.writer.add_scalar('MIoU', MIoU, self.current_epoch)
-            self.writer.add_scalar('FWIoU', FWIoU, self.current_epoch)
-            is_best = MIoU > self.best_MIou
+            self.writer.add_scalar('PA3', PA2, self.current_epoch)
+            self.writer.add_scalar('MPA3', MPA2, self.current_epoch)
+            self.writer.add_scalar('MIoU3', MIoU2, self.current_epoch)
+            self.writer.add_scalar('FWIoU3', FWIoU2, self.current_epoch)
+
+            self.writer.add_scalar('PA3', PA3, self.current_epoch)
+            # self.writer.add_scalar('MPA', MPA1, self.current_epoch)
+            self.writer.add_scalar('MIoU3', MIoU3, self.current_epoch)
+            # self.writer.add_scalar('FWIoU', FWIoU1, self.current_epoch)
+
+
+            is_best = MIoU3 > self.best_MIou
             if is_best:
-                self.best_MIou = MIoU
+                self.best_MIou = MIoU3
             self.save_checkpoint(is_best, 'bestper.pth')
 
             if self.current_iter >= self.config.iter_max:
-                logger.info("iteration arrive 10000!")
+                logger.info("iteration arrive 30000!")
                 break
             # writer.add_scalar('PA', PA)
             # print(PA)
@@ -217,16 +240,17 @@ class Trainer():
         tqdm_epoch = tqdm(self.dataloader.train_loader, total=self.dataloader.train_iterations,
                           desc="Train Epoch-{}-".format(self.current_epoch+1))
         logger.info("Training one epoch...")
+        self.metric.reset()
         # Set the model to be in training mode (for batchnorm)
 
         train_loss = []
+        preds = []
+        lab = []
         self.model.train()
         # Initialize your average meters
 
         batch_idx = 0
         for x, y, _ in tqdm_epoch:
-            self.current_iter += 1
-
             # self.poly_lr_scheduler(
             #     optimizer=self.optimizer,
             #     init_lr=self.config.lr,
@@ -244,6 +268,8 @@ class Trainer():
                 x, y = x.to(self.device), y.to(device=self.device, dtype=torch.long)
 
             self.optimizer.zero_grad()
+            self.lr = self.adjust_learning_rate(self.optimizer, self.current_iter)
+            # logger.info("current learning rate is:{}".format(self.lr))
             # model
             pred = self.model(x)
             y = torch.squeeze(y, 1)
@@ -251,26 +277,59 @@ class Trainer():
             # loss
             cur_loss = self.loss(pred, y)
 
-            # print(cur_loss)
-            if np.isnan(float(cur_loss.item())):
-                raise ValueError('Loss is nan during training...')
-
             # optimizer
 
             cur_loss.backward()
             self.optimizer.step()
+
             train_loss.append(cur_loss.item())
 
-            if batch_idx % self.config.batch_save ==0:
-                tqdm.write("The loss of epoch{}-batch-{}:{}".format(self.current_epoch, batch_idx, cur_loss.item()))
+            if batch_idx % self.config.batch_save == 0:
+                logger.info("The loss of epoch{}-batch-{}:{}".format(self.current_epoch, batch_idx, cur_loss.item()))
             batch_idx += 1
 
+            self.current_iter += 1
+
+            # print(cur_loss)
+            if np.isnan(float(cur_loss.item())):
+                raise ValueError('Loss is nan during training...')
+
+            pred = pred.data.cpu().numpy()
+            tt = y.cpu().numpy()
+            argpred = np.argmax(pred, axis=1)
+
+            outputs = mx.nd.array(pred)
+            targets = mx.nd.array(tt)
+
+            self.Eval.add_batch(tt, argpred)
+            self.metric.update(targets, outputs)
+            lab += list(tt)
+            preds += list(argpred)
+
+        PA = self.Eval.Pixel_Accuracy()
+        MPA = self.Eval.Mean_Pixel_Accuracy()
+        MIoU = self.Eval.Mean_Intersection_over_Union()
+        FWIoU = self.Eval.Frequency_Weighted_Intersection_over_Union()
+
+        score = scores(lab, preds, n_class=21)
+        PA2, MPA2, MIoU2, FWIoU2 = score.values()
+        pixAcc, mIoU = self.metric.get()
+
+        logger.info('Epoch:{}, validation PA1:{}, MPA1:{}, MIoU1:{}, FWIoU1:{}'.format(self.current_epoch, PA, MPA,
+                                                                                       MIoU, FWIoU))
+        logger.info('Epoch:{}, validation PA2:{}, MPA2:{}, MIoU2:{}, FWIoU2:{}'.format(self.current_epoch, PA2,
+                                                                                       MPA2, MIoU2, FWIoU2))
+        logger.info('Epoch:{}, validation PA3:{}, MIoU3:{}'.format(self.current_epoch, pixAcc, mIoU))
+
+
+        logger.info("current learning rate is:{}".format(self.lr))
         tr_loss = sum(train_loss)/len(train_loss)
         self.writer.add_scalar('train_loss', tr_loss, self.current_epoch)
         tqdm.write("The average loss of train epoch-{}-:{}".format(self.current_epoch, tr_loss))
         tqdm_epoch.close()
 
     def validate(self):
+        self.Eval.reset()
         with torch.no_grad():
             tqdm_batch = tqdm(self.dataloader.valid_loader, total=self.dataloader.valid_iterations,
                               desc="Val Epoch-{}-".format(self.current_epoch + 1))
@@ -295,14 +354,18 @@ class Trainer():
                 argpred = torch.argmax(pred,dim=1)
                 self.Eval.add_batch(y.cpu().numpy(), argpred.cpu().numpy())
 
-                if self.args.store_result == 'True':
+                if self.args.store_result == True and self.current_epoch == 20:
                     for i in range(len(id)):
-                        result = Image.fromarray(y[i])
-                        result.save(self.args.result_filepath + id[i] + '.png', mdoe='P')
+                        result = Image.fromarray(np.asarray(argpred, dtype=np.uint8)[i], mode='P')
+                        # logger.info("before:{}".format(result.mode))
+                        result = result.convert("RGB")
+                        # logger.info("after:{}".format(result.mode))
+                        # logger.info("shape:{}".format(result.getpixel((1,1))))
+                        result.save(self.args.result_filepath + id[i] + '.png')
 
-            loss = sum(val_loss) / len(val_loss)
-            logger.info("The average loss of val loss:{}".format(loss))
-
+            v_loss = sum(val_loss) / len(val_loss)
+            logger.info("The average loss of val loss:{}".format(v_loss))
+            self.writer.add_scalar('val_loss', v_loss, self.current_epoch)
 
             PA = self.Eval.Pixel_Accuracy()
             MPA = self.Eval.Mean_Pixel_Accuracy()
@@ -311,6 +374,82 @@ class Trainer():
             tqdm_batch.close()
 
         return PA, MPA, MIoU, FWIoU
+
+    def validate_2(self):
+        logger.info('validating one epoch...')
+        self.Eval.reset()
+        self.metric.reset()
+
+        with torch.no_grad():
+            tqdm_batch = tqdm(self.dataloader.valid_loader, total=self.dataloader.valid_iterations,
+                              desc="Val Epoch-{}-".format(self.current_epoch + 1))
+            val_loss = []
+            preds = []
+            lab = []
+            self.model.eval()
+
+            for x, y, id in tqdm_batch:
+                # y.to(torch.long)
+                if self.cuda:
+                    x, y = x.to(self.device), y.to(device=self.device, dtype=torch.long)
+
+                # model
+                pred = self.model(x)
+                y = torch.squeeze(y, 1)
+
+                cur_loss = self.loss(pred, y)
+                if np.isnan(float(cur_loss.item())):
+                    raise ValueError('Loss is nan during validating...')
+                val_loss.append(cur_loss.item())
+
+                # if self.args.store_result == True and self.current_epoch == 20:
+                #     for i in range(len(id)):
+                #         result = Image.fromarray(np.asarray(argpred, dtype=np.uint8)[i], mode='P')
+                #         # logger.info("before:{}".format(result.mode))
+                #         result = result.convert("RGB")
+                #         # logger.info("after:{}".format(result.mode))
+                #         # logger.info("shape:{}".format(result.getpixel((1,1))))
+                #         result.save(self.args.result_filepath + id[i] + '.png')
+
+                pred = pred.data.cpu().numpy()
+                tt = y.cpu().numpy()
+                argpred = np.argmax(pred, axis=1)
+
+                outputs = mx.nd.array(pred)
+                targets = mx.nd.array(tt)
+
+                self.Eval.add_batch(tt, argpred)
+                self.metric.update(targets, outputs)
+                lab += list(tt)
+                preds += list(argpred)
+
+
+
+
+
+            PA = self.Eval.Pixel_Accuracy()
+            MPA = self.Eval.Mean_Pixel_Accuracy()
+            MIoU = self.Eval.Mean_Intersection_over_Union()
+            FWIoU = self.Eval.Frequency_Weighted_Intersection_over_Union()
+
+            score = scores(lab, preds, n_class=21)
+            PA2, MPA2, MIoU2, FWIoU2 = score.values()
+            pixAcc, mIoU = self.metric.get()
+
+            logger.info('Epoch:{}, validation PA1:{}, MPA1:{}, MIoU1:{}, FWIoU1:{}'.format(self.current_epoch, PA, MPA,
+                                                                                          MIoU, FWIoU))
+            logger.info('Epoch:{}, validation PA2:{}, MPA2:{}, MIoU2:{}, FWIoU2:{}'.format(self.current_epoch, PA2,
+                                                                                           MPA2, MIoU2, FWIoU2))
+            logger.info('Epoch:{}, validation PA3:{}, MIoU3:{}'.format(self.current_epoch, pixAcc, mIoU))
+
+            v_loss = sum(val_loss) / len(val_loss)
+            logger.info("The average loss of val loss:{}".format(v_loss))
+            self.writer.add_scalar('val_loss', v_loss, self.current_epoch)
+
+            # logger.info(score)
+            tqdm_batch.close()
+
+        return PA, MPA, MIoU, FWIoU, score, pixAcc, mIoU
 
     def validate_3(self):
         logger.info('validating one epoch...')
@@ -403,35 +542,42 @@ class Trainer():
             logger.info("No checkpoint exists from '{}'. Skipping...".format(self.args.checkpoint_dir))
             logger.info("**First time to train**")
 
-    def get_params(self, model, key):
-        # For Dilated CNN
-        if key == "1x":
-            for m in model.named_modules():
-                if "layer" in m[0]:
-                    if isinstance(m[1], nn.Conv2d):
-                        for p in m[1].parameters():
-                            yield p
-        # For conv weight in the ASPP module
-        if key == "10x":
-            for m in model.named_modules():
-                if "aspp" in m[0] :
-                    if isinstance(m[1], nn.Conv2d):
-                        yield m[1].weight
-        # For conv bias in the ASPP module
-        if key == "20x":
-            for m in model.named_modules():
-                if "aspp" in m[0] :
-                    if isinstance(m[1], nn.Conv2d):
-                        yield m[1].bias
+    # def get_params(self, model, key):
+    #     # For Dilated CNN
+    #     if key == "1x":
+    #         for m in model.named_modules():
+    #             if "layer" in m[0]:
+    #                 if isinstance(m[1], nn.Conv2d):
+    #                     for p in m[1].parameters():
+    #                         yield p
+    #     # For conv weight in the ASPP module
+    #     if key == "10x":
+    #         for m in model.named_modules():
+    #             if "aspp" in m[0] :
+    #                 if isinstance(m[1], nn.Conv2d):
+    #                     yield m[1].weight
+    #     # For conv bias in the ASPP module
+    #     if key == "20x":
+    #         for m in model.named_modules():
+    #             if "aspp" in m[0] :
+    #                 if isinstance(m[1], nn.Conv2d):
+    #                     yield m[1].bias
+    #
+    # def poly_lr_scheduler(self, optimizer, init_lr, iter, lr_decay_iter, max_iter, power):
+    #     # if iter % lr_decay_iter or iter > max_iter:
+    #     #     return None
+    #     new_lr = init_lr * (1 - float(iter) / max_iter) ** power
+    #     optimizer.param_groups[0]["lr"] = new_lr
+    #     optimizer.param_groups[1]["lr"] = 10 * new_lr
+    #     optimizer.param_groups[2]["lr"] = 20 * new_lr
 
-    def poly_lr_scheduler(self, optimizer, init_lr, iter, lr_decay_iter, max_iter, power):
-        # if iter % lr_decay_iter or iter > max_iter:
-        #     return None
-        new_lr = init_lr * (1 - float(iter) / max_iter) ** power
-        optimizer.param_groups[0]["lr"] = new_lr
-        optimizer.param_groups[1]["lr"] = 10 * new_lr
-        optimizer.param_groups[2]["lr"] = 20 * new_lr
+    def lr_poly(self, base_lr, iter, max_iter, power):
+        return base_lr * ((1 - float(iter) / max_iter) ** (power))
 
+    def adjust_learning_rate(self, optimizer, i_iter):
+        lr = self.lr_poly(self.config.lr, i_iter, self.config.iter_max, self.config.poly_power)
+        optimizer.param_groups[0]['lr'] = lr
+        return lr
 
 
 

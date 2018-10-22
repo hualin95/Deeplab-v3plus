@@ -15,7 +15,7 @@ import sys
 sys.path.append(os.path.abspath('..'))
 
 from graphs.models.encoder import Encoder
-from graphs.models.AlignedXceptionWithoutDeformable import SeparableConv2d
+# from graphs.models.AlignedXceptionWithoutDeformable import SeparableConv2d
 
 
 class Decoder(nn.Module):
@@ -25,9 +25,14 @@ class Decoder(nn.Module):
         self.conv1 = nn.Conv2d(256, 48, kernel_size=1)
         self.bn1 = nn.BatchNorm2d(48)
         self.relu = nn.ReLU()
-        self.conv2 = SeparableConv2d(304, 256, kernel_size=3)
-        self.conv3 = SeparableConv2d(256, 256, kernel_size=3)
+        # self.conv2 = SeparableConv2d(304, 256, kernel_size=3)
+        # self.conv3 = SeparableConv2d(256, 256, kernel_size=3)
+        self.conv2 = nn.Conv2d(304, 256, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(256, 256, kernel_size=3, padding=1)
         self.conv4 = nn.Conv2d(256, class_num, kernel_size=1)
+
+        self._init_weight()
+
 
 
 
@@ -43,6 +48,47 @@ class Decoder(nn.Module):
         predict = F.interpolate(x_4_cat, scale_factor=4, mode='bilinear', align_corners=True)
         return predict
 
+    def _init_weight(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                # n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                # m.weight.data.normal_(0, math.sqrt(2. / n))
+                torch.nn.init.kaiming_normal_(m.weight)
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+
+
+
+class Decoder_3(nn.Module):
+    def __init__(self, class_num):
+        super(Decoder_3, self).__init__()
+        # self.encoder = Encoder(pretrained)
+        self.conv1 = nn.Conv2d(256, 256, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(256, class_num, kernel_size=1)
+
+        self._init_weight()
+
+
+
+
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.conv2(x)
+        predict = F.interpolate(x, scale_factor=16, mode='bilinear' ,align_corners=True)
+        return predict
+
+    def _init_weight(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                # n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                # m.weight.data.normal_(0, math.sqrt(2. / n))
+                torch.nn.init.kaiming_normal_(m.weight)
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+
 class DeepLab(nn.Module):
     def __init__(self, output_stide, class_num, pretrained):
         super(DeepLab, self).__init__()
@@ -54,6 +100,30 @@ class DeepLab(nn.Module):
     def forward(self, input):
         x, low_level_feature = self.encoder(input)
         output = self.decoder(x, low_level_feature)
+
+        return output
+
+    def _init_weight(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                # n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                # m.weight.data.normal_(0, math.sqrt(2. / n))
+                torch.nn.init.kaiming_normal_(m.weight)
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+
+class DeepLab_2(nn.Module):
+    def __init__(self, output_stide, class_num, pretrained):
+        super(DeepLab_2, self).__init__()
+        self.encoder = Encoder(output_stide, pretrained)
+        self.decoder = Decoder_3(class_num)
+
+        self._init_weight()
+
+    def forward(self, input):
+        x = self.encoder(input)
+        output = self.decoder(x)
 
         return output
 
