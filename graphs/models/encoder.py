@@ -9,7 +9,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision
+# import torchvision
 
 import sys
 sys.path.append(os.path.abspath('..'))
@@ -90,23 +90,23 @@ class Encoder(nn.Module):
 
         self.__init_weight()
 
+    def forward(self, input):
+        input, low_level_features = self.Resnet101(input)
+        input = self.ASPP(input)
+        input = self.conv1(input)
+        input = self.bn1(input)
+        input = self.relu1(input)
+        # input = self.dropout(input)
+        return input, low_level_features
+
     # def forward(self, input):
-    #     input, low_level_features = self.Resnet101(input)
+    #     input, _ = self.Resnet101(input)
     #     input = self.ASPP(input)
     #     input = self.conv1(input)
     #     input = self.bn1(input)
     #     input = self.relu1(input)
     #     input = self.dropout(input)
-    #     return input, low_level_features
-
-    def forward(self, input):
-        input, _ = self.Resnet101(input)
-        input = self.ASPP(input)
-        input = self.conv1(input)
-        input = self.bn1(input)
-        input = self.relu1(input)
-        input = self.dropout(input)
-        return input
+    #     return input
 
     def __init_weight(self):
         for m in self.modules():

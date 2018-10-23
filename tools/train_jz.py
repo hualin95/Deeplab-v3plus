@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# @Time    : 2018/9/26 15:48
+# @Time    : 2018/10/23 9:29
 # @Author  : HLin
 # @Email   : linhua2017@ia.ac.cn
-# @File    : train.py
+# @File    : train_jz.py
 # @Software: PyCharm
 
 import os
@@ -30,7 +30,7 @@ from utils.data_utils import calculate_weigths_labels
 from utils.eval_2 import Eval
 from utils.eval_3 import scores
 from graphs.models.decoder import DeepLab, DeepLab_2
-# from graphs.models.resnet101 import DeepLabv3_plus
+from graphs.models.resnet101 import DeepLabv3_plus
 from graphs.models.deeplabv3plus import DeepLabV3Plus
 from graphs.models.deeplabv2 import Res_Deeplab
 from graphs.models.model_jz import DeepLabv3_plus
@@ -109,14 +109,13 @@ class Trainer():
         self.loss.to(self.device)
 
         # model
-        # self.model = DeepLabv3_plus(3, 21, 16, True)
+        self.model = DeepLabv3_plus(3, 21, 16, True)
         # self.model = DeepLab(16, class_num=21, pretrained=True)
         # self.model = DeepLabV3Plus(n_classes=21,
         #                            n_blocks=[3, 4, 23, 3],
         #                            pyramids=[6, 12, 18],
         #                            grids=[1, 2, 4],
         #                            output_stride=16,)
-        self.model = DeepLab(output_stide=16, class_num=21, pretrained=True)
         self.model = nn.DataParallel(self.model)
         self.model.to(self.device)
 
@@ -125,9 +124,9 @@ class Trainer():
         # optimizer
         self.optimizer = torch.optim.SGD(params=self.model.parameters(),
                                           lr=self.config.lr,
-                                          momentum=self.config.momentum)
+                                          momentum=self.config.momentum,
                                           # dampening=self.config.dampening,
-                                          # weight_decay=self.config.weight_decay,
+                                          weight_decay=self.config.weight_decay)
                                           # nesterov=self.config.nesterov)
         # self.optimizer = torch.optim.SGD(
         #     # cf lr_mult and decay_mult in train.prototxt

@@ -165,8 +165,9 @@ class Voc_Dataset(data.Dataset):
 
     def _mask_transform(self, gt_image):
         target = np.array(gt_image).astype('int32')
-        target[target == 255] = 0
-        return torch.from_numpy(target)
+        target = torch.from_numpy(target)
+
+        return target
 
 
 

@@ -25,10 +25,12 @@ class Decoder(nn.Module):
         self.conv1 = nn.Conv2d(256, 48, kernel_size=1)
         self.bn1 = nn.BatchNorm2d(48)
         self.relu = nn.ReLU()
+        self.bn2 = nn.BatchNorm2d(256)
+        self.bn3 = nn.BatchNorm2d(256)
         # self.conv2 = SeparableConv2d(304, 256, kernel_size=3)
         # self.conv3 = SeparableConv2d(256, 256, kernel_size=3)
-        self.conv2 = nn.Conv2d(304, 256, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(256, 256, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(304, 256, kernel_size=3, padding=1, bias=False)
+        self.conv3 = nn.Conv2d(256, 256, kernel_size=3, padding=1, bias=False)
         self.conv4 = nn.Conv2d(256, class_num, kernel_size=1)
 
         self._init_weight()
@@ -40,10 +42,16 @@ class Decoder(nn.Module):
     def forward(self, x, low_level_feature):
         # x, low_level_feature = self.encoder(input)
         low_level_feature = self.conv1(low_level_feature)
+        low_level_feature = self.bn1(low_level_feature)
+        low_level_feature = self.relu(low_level_feature)
         x_4 = F.interpolate(x, scale_factor=4, mode='bilinear' ,align_corners=True)
         x_4_cat = torch.cat((x_4, low_level_feature), dim=1)
         x_4_cat = self.conv2(x_4_cat)
+        x_4_cat = self.bn2(x_4_cat)
+        x_4_cat = self.relu(x_4_cat)
         x_4_cat = self.conv3(x_4_cat)
+        x_4_cat = self.bn3(x_4_cat)
+        x_4_cat = self.relu(x_4_cat)
         x_4_cat = self.conv4(x_4_cat)
         predict = F.interpolate(x_4_cat, scale_factor=4, mode='bilinear', align_corners=True)
         return predict
@@ -68,10 +76,6 @@ class Decoder_3(nn.Module):
         self.conv2 = nn.Conv2d(256, class_num, kernel_size=1)
 
         self._init_weight()
-
-
-
-
 
     def forward(self, x):
         x = self.conv1(x)

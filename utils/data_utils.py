@@ -23,7 +23,7 @@ def calculate_weigths_labels(config):
     tqdm_batch = tqdm(data_loader.train_loader, total=data_loader.train_iterations)
 
     for _, y, _ in tqdm_batch:
-        y = y.numpy()*255
+        y = y.numpy()
         mask = (y >= 0) & (y < config.num_classes)
         labels = y[mask].astype(np.uint8) #.ravel().tolist()
         count_l = np.bincount(labels, minlength=config.num_classes)

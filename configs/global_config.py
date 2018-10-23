@@ -21,12 +21,12 @@ cfg.classes_weight = '/data/linhua/VOCdevkit/pretrained_weights/'
 cfg.data_loader_workers = 2
 cfg.pin_memory = True
 
-cfg.batch_size = 24
-cfg.epoch_num = 30
-cfg.batch_save = 200
+cfg.batch_size = 8
+cfg.epoch_num = 40
+cfg.batch_save = 50
 
 # Nesterov Momentum
-cfg.lr = 0.007
+cfg.lr = 0.01
 # cfg.lr_10x = 2.5e-4
 cfg.momentum = 0.9
 cfg.dampening = 0
