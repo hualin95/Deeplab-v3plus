@@ -9,25 +9,22 @@ from easydict import EasyDict as edict
 cfg = edict()
 
 # dataset
-cfg.dataset = "voc2012"
+# cfg.dataset = "voc2012_aug"
 cfg.num_classes = 21
-cfg.base_size = 520
-cfg.crop_size = 480
+cfg.base_size = 513
+cfg.crop_size = 513
 # cfg.classes_weight = True
 
 
 cfg.classes_weight = '/data/linhua/VOCdevkit/pretrained_weights/'
-#'/data2/linhua/VOCdevkit/pretrained_weights/voc2012_256_class_weights'
 cfg.data_loader_workers = 2
 cfg.pin_memory = True
 
-cfg.batch_size = 8
-cfg.epoch_num = 40
+cfg.batch_size = 16
+cfg.epoch_num = 46
 cfg.batch_save = 50
 
 # Nesterov Momentum
-cfg.lr = 0.01
-# cfg.lr_10x = 2.5e-4
 cfg.momentum = 0.9
 cfg.dampening = 0
 cfg.nesterov = True
@@ -38,7 +35,7 @@ cfg.weight_decay = 4e-5
 # train protocol
 cfg.bn_decay = 0.9997
 cfg.lr_decay = 10
-cfg.iter_max = 30000
+# cfg.iter_max = 50
 cfg.poly_power = 0.9
 
 
@@ -46,5 +43,3 @@ cfg.poly_power = 0.9
 cfg.step_size = 30000
 cfg.gamma = 0.1
 
-
-cfg.checkpoint_file = 'bestper.pth'

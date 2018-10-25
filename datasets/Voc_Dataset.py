@@ -176,15 +176,16 @@ class Voc_Dataset(data.Dataset):
         return len(self.items)
 
 class VOCDataLoader():
-    def __init__(self, config):
+    def __init__(self, args, config):
 
         self.config = config
+        self.args = args
 
-        train_set = Voc_Dataset(dataset=self.config.dataset,
+        train_set = Voc_Dataset(dataset=self.args.dataset,
                                 base_size=self.config.base_size,
                                 crop_size=self.config.crop_size,
                                 is_training=True)
-        val_set = Voc_Dataset(dataset=self.config.dataset,
+        val_set = Voc_Dataset(dataset=self.args.dataset,
                               base_size=self.config.base_size,
                               crop_size=self.config.crop_size,
                               is_training=False)
