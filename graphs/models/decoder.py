@@ -10,7 +10,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchsummary import summary
-from graphs.models.RResNet101 import resnet101
+from graphs.models.ResNet101 import resnet101
+from graphs.models.sync_batchnorm.batchnorm import SynchronizedBatchNorm2d
 
 import sys
 sys.path.append(os.path.abspath('..'))
@@ -22,15 +23,15 @@ class Decoder(nn.Module):
     def __init__(self, class_num, bn_momentum=0.1):
         super(Decoder, self).__init__()
         self.conv1 = nn.Conv2d(256, 48, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(48, momentum=bn_momentum)
+        self.bn1 = SynchronizedBatchNorm2d(48, momentum=bn_momentum)
         self.relu = nn.ReLU()
         # self.conv2 = SeparableConv2d(304, 256, kernel_size=3)
         # self.conv3 = SeparableConv2d(256, 256, kernel_size=3)
         self.conv2 = nn.Conv2d(304, 256, kernel_size=3, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(256, momentum=bn_momentum)
+        self.bn2 = SynchronizedBatchNorm2d(256, momentum=bn_momentum)
         self.dropout2 = nn.Dropout(0.5)
         self.conv3 = nn.Conv2d(256, 256, kernel_size=3, padding=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(256, momentum=bn_momentum)
+        self.bn3 = SynchronizedBatchNorm2d(256, momentum=bn_momentum)
         self.dropout3 = nn.Dropout(0.1)
         self.conv4 = nn.Conv2d(256, class_num, kernel_size=1)
 
@@ -60,7 +61,7 @@ class Decoder(nn.Module):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 torch.nn.init.kaiming_normal_(m.weight)
-            elif isinstance(m, nn.BatchNorm2d):
+            elif isinstance(m, SynchronizedBatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
@@ -86,21 +87,21 @@ class DeepLab(nn.Module):
 
     def freeze_bn(self):
         for m in self.modules():
-            if isinstance(m, nn.BatchNorm2d):
+            if isinstance(m, SynchronizedBatchNorm2d):
                 m.eval()
 
 
 if __name__ =="__main__":
     model = DeepLab(output_stride=16, class_num=21, pretrained=False, freeze_bn=False)
     model.eval()
-    print(model)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = model.to(device)
-    summary(model, (3, 513, 513))
+    # print(model)
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # model = model.to(device)
+    # summary(model, (3, 513, 513))
     # for m in model.named_modules():
-    # for m in model.modules():
-    #     if isinstance(m, nn.BatchNorm2d):
-    #         print(m)
+    for m in model.modules():
+        if isinstance(m, SynchronizedBatchNorm2d):
+            print(m)
 
 
 

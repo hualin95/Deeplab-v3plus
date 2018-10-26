@@ -19,6 +19,9 @@ from tensorboardX import SummaryWriter
 import torchvision.transforms as transforms
 import gluoncv
 import mxnet as mx
+import sys
+sys.path.append(os.path.abspath('..'))
+from graphs.models.sync_batchnorm.replicate import patch_replication_callback
 
 from tqdm import tqdm
 
@@ -50,12 +53,12 @@ arg_parser.add_argument('--store_result', type=str2bool, default=True)
 arg_parser.add_argument('--checkpoint_dir', default=os.path.abspath('..')+"/checkpoints/")
 arg_parser.add_argument('--saved_checkpoint_file')
 arg_parser.add_argument('--pretrained', type=str2bool, default=False)
-arg_parser.add_argument('--store_checkpoint_name', default="voc2012_no_class_weight_big_bn_25")
+arg_parser.add_argument('--store_checkpoint_name', default="voc2012_no_class_weight_sync_bn_26")
 arg_parser.add_argument('--freeze_bn', type=str2bool, default=False)
 arg_parser.add_argument('--bn_momentum', type=float, default=0.1)
 arg_parser.add_argument('--lr', type=float, default=0.007)
 arg_parser.add_argument('--iter_max', type=int, default=30000)
-arg_parser.add_argument('--gpu', type=str, default="0,1,2,3")
+arg_parser.add_argument('--gpu', type=str, default="4,5,6,7")
 arg_parser.add_argument('--output_stride', type=int, default=16)
 arg_parser.add_argument('--dataset', type=str, default='voc2012_aug')
 
@@ -63,7 +66,7 @@ arg_parser.add_argument('--dataset', type=str, default='voc2012_aug')
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-fh = logging.FileHandler('logger_with_weight_aug.txt')
+fh = logging.FileHandler('logger_with_weight_aug_sync.txt')
 ch = logging.StreamHandler()
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
@@ -120,7 +123,8 @@ class Trainer():
                              pretrained=self.args.imagenet_pretrained,
                              bn_momentum=self.args.bn_momentum,
                              freeze_bn=self.args.freeze_bn)
-        self.model = nn.DataParallel(self.model)
+        self.model = nn.DataParallel(self.model, device_ids=range(4))
+        patch_replication_callback(self.model)
         self.model.to(self.device)
 
         self.optimizer = torch.optim.SGD(

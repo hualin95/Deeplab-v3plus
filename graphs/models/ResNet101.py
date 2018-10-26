@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
-# @Time    : 2018/10/18 15:26
+# @Time    : 2018/10/26 17:45
 # @Author  : HLin
 # @Email   : linhua2017@ia.ac.cn
-# @File    : RResNet101.py
+# @File    : ResNet101.py
 # @Software: PyCharm
 
 import torch
 import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
 from torchsummary import summary
-from graphs.models.sync_batchnorm.batchnorm import SynchronizedBatchNorm1d
+from graphs.models.sync_batchnorm.batchnorm import SynchronizedBatchNorm2d
 
 model_urls = {
     'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
@@ -25,12 +25,12 @@ class Bottleneck(nn.Module):
     def __init__(self, inplanes, planes, stride=1, dilation=1, downsample=None, bn_momentum=0.1):
         super(Bottleneck, self).__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes, momentum=bn_momentum)
+        self.bn1 = SynchronizedBatchNorm2d(planes, momentum=bn_momentum)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
                                padding=dilation, dilation=dilation, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes, momentum=bn_momentum)
+        self.bn2 = SynchronizedBatchNorm2d(planes, momentum=bn_momentum)
         self.conv3 = nn.Conv2d(planes, planes * self.expansion, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(planes * self.expansion, momentum=bn_momentum)
+        self.bn3 = SynchronizedBatchNorm2d(planes * self.expansion, momentum=bn_momentum)
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
@@ -73,7 +73,7 @@ class ResNet(nn.Module):
         super(ResNet, self).__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
                                bias=False)
-        self.bn1 = nn.BatchNorm2d(64, momentum=bn_momentum)
+        self.bn1 = SynchronizedBatchNorm2d(64, momentum=bn_momentum)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0], stride=strides[0], dilation=dilations[0],
@@ -96,7 +96,7 @@ class ResNet(nn.Module):
             downsample = nn.Sequential(
                 nn.Conv2d(self.inplanes, planes * block.expansion,
                           kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(planes * block.expansion, momentum=bn_momentum),
+                SynchronizedBatchNorm2d(planes * block.expansion, momentum=bn_momentum),
             )
 
         layers = []

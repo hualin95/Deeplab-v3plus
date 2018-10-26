@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchsummary import summary
 # import torchvision
+from graphs.models.sync_batchnorm.batchnorm import SynchronizedBatchNorm2d
 
 import sys
 sys.path.append(os.path.abspath('..'))
@@ -18,7 +19,7 @@ sys.path.append(os.path.abspath('..'))
 def _AsppConv(in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, bn_momentum=0.1):
     asppconv = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, dilation, bias=False),
-            nn.BatchNorm2d(out_channels, momentum=bn_momentum),
+            SynchronizedBatchNorm2d(out_channels, momentum=bn_momentum),
             nn.ReLU()
         )
     return asppconv
@@ -47,7 +48,7 @@ class AsppModule(nn.Module):
         self._image_pool = nn.Sequential(
             nn.AdaptiveAvgPool2d((1,1)),
             nn.Conv2d(2048, 256, kernel_size=1, bias=False),
-            nn.BatchNorm2d(256, momentum=bn_momentum),
+            SynchronizedBatchNorm2d(256, momentum=bn_momentum),
             nn.ReLU()
         )
 
@@ -67,7 +68,7 @@ class AsppModule(nn.Module):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 torch.nn.init.kaiming_normal_(m.weight)
-            elif isinstance(m, nn.BatchNorm2d):
+            elif isinstance(m, SynchronizedBatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
@@ -77,7 +78,7 @@ class Encoder(nn.Module):
         self.ASPP = AsppModule(bn_momentum=bn_momentum, output_stride=output_stride)
         self.relu = nn.ReLU()
         self.conv1 = nn.Conv2d(1280, 256, 1, bias=False)
-        self.bn1 = nn.BatchNorm2d(256, momentum=bn_momentum)
+        self.bn1 = SynchronizedBatchNorm2d(256, momentum=bn_momentum)
         self.dropout = nn.Dropout(0.5)
 
         self.__init_weight()
@@ -95,7 +96,7 @@ class Encoder(nn.Module):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 torch.nn.init.kaiming_normal_(m.weight)
-            elif isinstance(m, nn.BatchNorm2d):
+            elif isinstance(m, SynchronizedBatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
