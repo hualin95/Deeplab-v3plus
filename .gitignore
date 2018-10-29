@@ -104,3 +104,23 @@ crashlytics.properties
 crashlytics-build.properties
 
 fabric.properties
+Java Printing.pdf
+checkpoints/
+data/
+imgaes/01_class_thumb.png
+imgaes/07_class_thumb.png
+imgaes/11_class_thumb.png
+imgaes/17_class_thumb.png
+imgaes/2007_000243.png
+imgaes/21_class_thumb.png
+imgaes/gt/
+imgaes/pred/
+mx_res101.pdf
+pretrained_weights/
+tools/logger1.txt
+tools/runs/
+tools/test.sh
+utils/bsd.py
+utils/eval_3.py
+utils/mx2torch.py
+venv/Include/
