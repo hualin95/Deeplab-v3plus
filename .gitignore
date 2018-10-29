@@ -123,5 +123,4 @@ tools/test.sh
 utils/bsd.py
 utils/eval_3.py
 utils/mx2torch.py
-venv/Include/
-venv
+venv/
