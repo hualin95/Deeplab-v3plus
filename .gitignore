@@ -116,11 +116,9 @@ imgaes/gt/
 imgaes/pred/
 mx_res101.pdf
 pretrained_weights/
-tools/logger1.txt
 tools/runs/
 tools/test.sh
 utils/bsd.py
-utils/eval_3.py
 utils/mx2torch.py
 venv/
 __pycache__/

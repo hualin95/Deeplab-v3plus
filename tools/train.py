@@ -29,8 +29,7 @@ import sys
 sys.path.append(os.path.abspath('..'))
 
 from utils.data_utils import calculate_weigths_labels
-from utils.eval_2 import Eval
-from utils.eval_3 import scores
+from utils.eval import Eval
 from graphs.models.decoder import DeepLab
 from datasets.Voc_Dataset import VOCDataLoader
 from configs.global_config import cfg
