@@ -9,16 +9,11 @@ import os
 import pprint
 import logging
 import numpy as np
-from PIL import Image
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.optim import lr_scheduler
 import argparse
 from tensorboardX import SummaryWriter
-import torchvision.transforms as transforms
-import gluoncv
-import mxnet as mx
+
 import sys
 sys.path.append(os.path.abspath('..'))
 from graphs.models.sync_batchnorm.replicate import patch_replication_callback
@@ -95,9 +90,6 @@ class Trainer():
 
         # Metric definition
         self.Eval = Eval(self.config.num_classes)
-
-        self.metric = gluoncv.utils.metrics.SegmentationMetric(self.config.num_classes)
-
 
         # loss definition
         if args.loss_weight:
@@ -203,7 +195,6 @@ class Trainer():
                           desc="Train Epoch-{}-".format(self.current_epoch+1))
         logger.info("Training one epoch...")
         self.Eval.reset()
-        self.metric.reset()
         # Set the model to be in training mode (for batchnorm and dropout)
 
         train_loss = []
