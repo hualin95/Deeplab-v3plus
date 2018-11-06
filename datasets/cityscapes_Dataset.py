@@ -17,10 +17,10 @@ import torchvision.transforms as ttransforms
 
 
 
-class city_Dataset(data.Dataset):
+class City_Dataset(data.Dataset):
     def __init__(self,
                  data_path='/data/linhua/Cityscapes',
-                 list_path='.list/cityscapes',
+                 list_path='/city_list',
                  split='train',
                  base_size=520,
                  crop_size=480):
@@ -40,23 +40,23 @@ class city_Dataset(data.Dataset):
         self.crop_size = crop_size
 
         if self.split == 'train':
-            item_list_filepath = os.path.join(self.list_path, "train.lst")
+            item_list_filepath = os.path.join(self.list_path, "train.txt")
 
         elif self.split == 'val':
-            item_list_filepath = os.path.join(self.list_path, "val.lst")
+            item_list_filepath = os.path.join(self.list_path, "val.txt")
 
         elif self.split == 'trainval':
-            item_list_filepath = os.path.join(self.list_path, "trainval.lst")
+            item_list_filepath = os.path.join(self.list_path, "trainval.txt")
 
         elif self.split == 'test':
-            item_list_filepath = os.path.join(self.list_path, "test.lst")
+            item_list_filepath = os.path.join(self.list_path, "test.txt")
 
         else:
             raise Warning("split must be train/val/trainavl/test")
 
-        self.image_filepath = os.path.join(self.data_path, "leftImg8bit_trainvaltest")
+        self.image_filepath = os.path.join(self.data_path, "leftImg8bit_trainvaltest/leftImg8bit")
 
-        self.gt_filepath = os.path.join(self.data_path, "gtFine_trainvaltest")
+        self.gt_filepath = os.path.join(self.data_path, "gtFine_trainvaltest/gtFine")
 
 
         self.items = [id.strip() for id in open(item_list_filepath)]
@@ -64,28 +64,30 @@ class city_Dataset(data.Dataset):
 
 
     def __getitem__(self, item):
-        id = self.items[item][0]
-        if self.split != "test":
-            image_path, gt_image_path = self.items[item]
-            gt_image = Image.open(gt_image_path)
-            image = Image.open(image_path).convert("RGB")
-            if self.split == "train" or self.split == "trainval":
-                image, gt_image = self._train_sync_transform(image, gt_image)
-            elif self.split == "val":
-                image, gt_image = self._val_sync_transform(image, gt_image)
-
-            return image, gt_image
-
         id = self.items[item]
-        image_path = self.items[item]
-        else:
-            image_path, gt_image_path = self.items[item]
-            gt_image = Image.open(gt_image_path)
+        filename = id.split("train_")[-1].split("val_")[-1]
 
+        self.image_filepath = os.path.join(self.image_filepath, id.split("_")[0], id.split("_")[1])
+        image_filename = filename + "_leftImg8bit.png"
+        image_path = os.path.join(self.image_filepath, image_filename)
         image = Image.open(image_path).convert("RGB")
 
+        if self.split == "test":
+            return self._test_transform(image), filename
 
-        return image, gt_image, id
+        self.gt_filepath = os.path.join(self.gt_filepath, id.split("_")[0], id.split("_")[1])
+        gt_filename = filename + "_gtFine_labelIds.png"
+        gt_image_path = os.path.join(self.gt_filepath, gt_filename)
+        gt_image = Image.open(gt_image_path)
+
+        if self.split == "train" or self.split == "trainval":
+            image, gt_image = self._train_sync_transform(image, gt_image)
+        else:
+            image, gt_image = self._val_sync_transform(image, gt_image)
+
+        return image, gt_image, filename
+
+
 
     def _train_sync_transform(self, img, mask):
         '''
@@ -186,42 +188,88 @@ class city_Dataset(data.Dataset):
 
         return target
 
-
-
-
     def __len__(self):
         return len(self.items)
 
-class VOCDataLoader():
-    def __init__(self, args, config):
+class City_DataLoader():
+    def __init__(self, split, config):
 
         self.config = config
-        self.args = args
 
-        train_set = Voc_Dataset(dataset=self.args.dataset,
+        # train_set = City_Dataset(data_path=self.config.cityscapes_path,
+        #                         list_path='/city_list',
+        #                         split='train',
+        #                         base_size=self.config.base_size,
+        #                         crop_size=self.config.crop_size)
+        #
+        # val_set = City_Dataset(data_path=self.config.cityscapes_path,
+        #                         list_path='/city_list',
+        #                         split='val',
+        #                         base_size=self.config.base_size,
+        #                         crop_size=self.config.crop_size)
+        #
+        # trainval_set = City_Dataset(data_path=self.config.cityscapes_path,
+        #                         list_path='/city_list',
+        #                         split='trainval',
+        #                         base_size=self.config.base_size,
+        #                         crop_size=self.config.crop_size)
+        #
+        # test_set = City_Dataset(data_path=self.config.cityscapes_path,
+        #                         list_path='/city_list',
+        #                         split='test',
+        #                         base_size=self.config.base_size,
+        #                         crop_size=self.config.crop_size)
+        #
+        # self.train_loader = data.DataLoader(train_set,
+        #                                     batch_size=self.config.batch_size,
+        #                                     shuffle=True,
+        #                                     num_workers=self.config.data_loader_workers,
+        #                                     pin_memory=self.config.pin_memory,
+        #                                     drop_last=True)
+        # self.valid_loader = data.DataLoader(val_set,
+        #                                     batch_size=self.config.batch_size,
+        #                                     shuffle=False,
+        #                                     num_workers=self.config.data_loader_workers,
+        #                                     pin_memory=self.config.pin_memory,
+        #                                     drop_last=True)
+        # self.trainval_loader = data.DataLoader(trainval_set,
+        #                                     batch_size=self.config.batch_size,
+        #                                     shuffle=True,
+        #                                     num_workers=self.config.data_loader_workers,
+        #                                     pin_memory=self.config.pin_memory,
+        #                                     drop_last=True)
+        # self.test_loader = data.DataLoader(test_set,
+        #                                     batch_size=self.config.batch_size,
+        #                                     shuffle=False,
+        #                                     num_workers=self.config.data_loader_workers,
+        #                                     pin_memory=self.config.pin_memory,
+        #                                     drop_last=True)
+        data_set = City_Dataset(data_path=self.config.cityscapes_path,
+                                list_path='/city_list',
+                                split=split,
                                 base_size=self.config.base_size,
-                                crop_size=self.config.crop_size,
-                                is_training=True)
-        val_set = Voc_Dataset(dataset=self.args.dataset,
-                              base_size=self.config.base_size,
-                              crop_size=self.config.crop_size,
-                              is_training=False)
+                                crop_size=self.config.crop_size)
 
-        self.train_loader = data.DataLoader(train_set,
-                                            batch_size=self.config.batch_size,
-                                            shuffle=True,
-                                            num_workers=self.config.data_loader_workers,
-                                            pin_memory=self.config.pin_memory,
-                                            drop_last=True)
-        self.valid_loader = data.DataLoader(val_set,
-                                            batch_size=self.config.batch_size,
-                                            shuffle=False,
-                                            num_workers=self.config.data_loader_workers,
-                                            pin_memory=self.config.pin_memory,
-                                            drop_last=True)
+        if split == "train" or split == "trainval":
+            self.data_loader = data.DataLoader(data_set,
+                                               batch_size=self.config.batch_size,
+                                               shuffle=True,
+                                               num_workers=self.config.data_loader_workers,
+                                               pin_memory=self.config.pin_memory,
+                                               drop_last=True)
+        elif split =="val" or split == "test":
+            self.data_loader = data.DataLoader(data_set,
+                                               batch_size=self.config.batch_size,
+                                               shuffle=False,
+                                               num_workers=self.config.data_loader_workers,
+                                               pin_memory=self.config.pin_memory,
+                                               drop_last=True)
+        else:
+            raise Warning("split must be train/val/trainavl/test")
 
-        self.train_iterations = (len(train_set) + self.config.batch_size) // self.config.batch_size
-        self.valid_iterations = (len(val_set) + self.config.batch_size) // self.config.batch_size
+
+
+        self.iterations_num = (len(data_set) + self.config.batch_size) // self.config.batch_size
 
 
 

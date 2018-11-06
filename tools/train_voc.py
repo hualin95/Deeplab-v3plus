@@ -2,27 +2,22 @@
 # @Time    : 2018/9/26 15:48
 # @Author  : HLin
 # @Email   : linhua2017@ia.ac.cn
-# @File    : train.py
+# @File    : train_voc.py
 # @Software: PyCharm
 
 import os
 import pprint
 import logging
-import numpy as np
+import argparse
 import torch
 import torch.nn as nn
-import argparse
+from tqdm import tqdm
+import numpy as np
 from tensorboardX import SummaryWriter
 
 import sys
 sys.path.append(os.path.abspath('..'))
 from graphs.models.sync_batchnorm.replicate import patch_replication_callback
-
-from tqdm import tqdm
-
-import sys
-sys.path.append(os.path.abspath('..'))
-
 from utils.data_utils import calculate_weigths_labels
 from utils.eval import Eval
 from graphs.models.decoder import DeepLab

@@ -10,6 +10,7 @@ cfg = edict()
 
 # dataset
 # cfg.dataset = "voc2012_aug"
+cfg.cityscapes_path = "/data/linhua/Cityscapes"
 cfg.num_classes = 21
 cfg.base_size = 513
 cfg.crop_size = 513

@@ -26,7 +26,7 @@ for root, dirs, _ in os.walk(train_path):
         files = os.listdir(dir)
         for file in files:
             if file[-12:-4] == 'labelIds':
-                file_name = file[:-20]+"\n"
+                file_name = "train_"+file[:-20]+"\n"
                 train_l.append(file_name)
 f.writelines(train_l)
 
@@ -37,7 +37,7 @@ for root, dirs, _ in os.walk(val_path):
         files = os.listdir(dir)
         for file in files:
             if file[-12:-4] == 'labelIds':
-                file_name = file[:-20]+"\n"
+                file_name = "val_"+file[:-20]+"\n"
                 val_l.append(file_name)
 f.writelines(val_l)
 
@@ -48,7 +48,7 @@ for root, dirs, _ in os.walk(test_path):
         files = os.listdir(dir)
         for file in files:
             if file[-12:-4] == 'labelIds':
-                file_name = file[:-20]+"\n"
+                file_name = "test_"+file[:-20]+"\n"
                 test_l.append(file_name)
 f.writelines(test_l)
 
