@@ -42,7 +42,7 @@ arg_parser.add_argument('--store_result', type=str2bool, default=True)
 arg_parser.add_argument('--checkpoint_dir', default=os.path.abspath('..')+"/checkpoints/")
 arg_parser.add_argument('--saved_checkpoint_file')
 arg_parser.add_argument('--pretrained', type=str2bool, default=False)
-arg_parser.add_argument('--store_checkpoint_name', default="voc2012_no_class_weight_sync_bn_26")
+arg_parser.add_argument('--store_checkpoint_name', default="voc2012_aug_no_class_weight_sync_gluon8.pth")
 arg_parser.add_argument('--freeze_bn', type=str2bool, default=False)
 arg_parser.add_argument('--bn_momentum', type=float, default=0.1)
 arg_parser.add_argument('--lr', type=float, default=0.007)
@@ -55,7 +55,7 @@ arg_parser.add_argument('--dataset', type=str, default='voc2012_aug')
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-fh = logging.FileHandler('logger_with_weight_aug_sync.txt')
+fh = logging.FileHandler('logger_with_weight_aug_sync_gluon_8.txt')
 ch = logging.StreamHandler()
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
@@ -79,9 +79,9 @@ class Trainer():
         self.writer = SummaryWriter()
 
         # path definition
-        self.val_list_filepath = os.path.join(args.data_root_path, 'VOC2012/ImageSets/Segmentation/val.txt')
-        self.gt_filepath = os.path.join(args.data_root_path, 'VOC2012/SegmentationClass/')
-        self.pre_filepath = os.path.join(args.data_root_path, 'VOC2012/JPEGImages/')
+        # self.val_list_filepath = os.path.join(args.data_root_path, 'VOC2012/ImageSets/Segmentation/val.txt')
+        # self.gt_filepath = os.path.join(args.data_root_path, 'VOC2012/SegmentationClass/')
+        # self.pre_filepath = os.path.join(args.data_root_path, 'VOC2012/JPEGImages/')
 
         # Metric definition
         self.Eval = Eval(self.config.num_classes)

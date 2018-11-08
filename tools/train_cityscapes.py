@@ -57,6 +57,7 @@ arg_parser.add_argument('--iter_max', type=int, default=30000, help="the maxinum
 arg_parser.add_argument('--gpu', type=str, default="4,5,6,7", help=" the num of gpu")
 arg_parser.add_argument('--output_stride', type=int, default=16)
 arg_parser.add_argument('--split', type=str, default='train', help="choose from train/val/test/trainval")
+arg_parser.add_argument('--validation', type=str2bool, default=True, help="whether to val")
 
 
 
@@ -85,10 +86,6 @@ class Trainer():
 
         self.writer = SummaryWriter()
 
-        # path definition
-        self.val_list_filepath = os.path.join(args.data_root_path, 'VOC2012/ImageSets/Segmentation/val.txt')
-        self.gt_filepath = os.path.join(args.data_root_path, 'VOC2012/SegmentationClass/')
-        self.pre_filepath = os.path.join(args.data_root_path, 'VOC2012/JPEGImages/')
 
         # Metric definition
         self.Eval = Eval(self.config.num_classes)
@@ -138,6 +135,8 @@ class Trainer():
         )
         # dataloader
         self.dataloader = City_DataLoader(self.args, self.config)
+        if self.args.validation == True:
+            self.val_data = City_DataLoader(self.args, 'val')
 
     def main(self):
         # set TensorboardX
@@ -193,7 +192,7 @@ class Trainer():
 
 
     def train_one_epoch(self):
-        tqdm_epoch = tqdm(self.dataloader.train_loader, total=self.dataloader.train_iterations,
+        tqdm_epoch = tqdm(self.dataloader.data_loader, total=self.dataloader.iterations_num,
                           desc="Train Epoch-{}-".format(self.current_epoch+1))
         logger.info("Training one epoch...")
         self.Eval.reset()
@@ -263,7 +262,7 @@ class Trainer():
         MIoU = self.Eval.Mean_Intersection_over_Union()
         FWIoU = self.Eval.Frequency_Weighted_Intersection_over_Union()
 
-        logger.info('Epoch:{}, train PA1:{}, MPA1:{}, MIoU1:{}, FWIoU1:{}'.format(self.current_epoch, PA, MPA,
+        logger.info('Epoch:{}, train PA:{}, MPA:{}, MIoU:{}, FWIoU:{}'.format(self.current_epoch, PA, MPA,
                                                                                        MIoU, FWIoU))
 
 
@@ -276,7 +275,7 @@ class Trainer():
         logger.info('validating one epoch...')
         self.Eval.reset()
         with torch.no_grad():
-            tqdm_batch = tqdm(self.dataloader.valid_loader, total=self.dataloader.valid_iterations,
+            tqdm_batch = tqdm(self.val_data.data_loader, total=self.val_data.iterations_num,
                               desc="Val Epoch-{}-".format(self.current_epoch + 1))
             val_loss = []
             preds = []
@@ -317,7 +316,7 @@ class Trainer():
             MIoU = self.Eval.Mean_Intersection_over_Union()
             FWIoU = self.Eval.Frequency_Weighted_Intersection_over_Union()
 
-            logger.info('Epoch:{}, validation PA1:{}, MPA1:{}, MIoU1:{}, FWIoU1:{}'.format(self.current_epoch, PA, MPA,
+            logger.info('Epoch:{}, validation PA:{}, MPA:{}, MIoU:{}, FWIoU:{}'.format(self.current_epoch, PA, MPA,
                                                                                           MIoU, FWIoU))
             v_loss = sum(val_loss) / len(val_loss)
             logger.info("The average loss of val loss:{}".format(v_loss))
