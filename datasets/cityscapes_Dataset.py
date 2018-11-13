@@ -20,7 +20,7 @@ import torchvision.transforms as ttransforms
 class City_Dataset(data.Dataset):
     def __init__(self,
                  data_path='/data/linhua/Cityscapes',
-                 list_path='/city_list',
+                 list_path=os.path.abspath('..'),
                  split='train',
                  base_size=520,
                  crop_size=480):
@@ -39,6 +39,7 @@ class City_Dataset(data.Dataset):
         self.base_size = base_size
         self.crop_size = crop_size
 
+        self.list_path = os.path.join(list_path, "datasets/city_list")
         if self.split == 'train':
             item_list_filepath = os.path.join(self.list_path, "train.txt")
 
@@ -58,26 +59,38 @@ class City_Dataset(data.Dataset):
 
         self.gt_filepath = os.path.join(self.data_path, "gtFine_trainvaltest/gtFine")
 
-
         self.items = [id.strip() for id in open(item_list_filepath)]
 
+        self._key = np.array([-1, -1, -1, -1, -1, -1,
+                              -1, -1, 0, 1, -1, -1,
+                              2, 3, 4, -1, -1, -1,
+                              5, -1, 6, 7, 8, 9,
+                              10, 11, 12, 13, 14, 15,
+                              -1, -1, 16, 17, 18])
+        self._mapping = np.array(range(-1, len(self._key) - 1)).astype('int32')
 
+    def _class_to_index(self, mask):
+        # assert the values
+        values = np.unique(mask)
+        for value in values:
+            assert (value in self._mapping)
+        index = np.digitize(mask.ravel(), self._mapping, right=True)
+        return self._key[index].reshape(mask.shape)
 
     def __getitem__(self, item):
         id = self.items[item]
         filename = id.split("train_")[-1].split("val_")[-1]
-
-        self.image_filepath = os.path.join(self.image_filepath, id.split("_")[0], id.split("_")[1])
+        image_filepath = os.path.join(self.image_filepath, id.split("_")[0], id.split("_")[1])
         image_filename = filename + "_leftImg8bit.png"
-        image_path = os.path.join(self.image_filepath, image_filename)
+        image_path = os.path.join(image_filepath, image_filename)
         image = Image.open(image_path).convert("RGB")
 
         if self.split == "test":
             return self._test_transform(image), filename
 
-        self.gt_filepath = os.path.join(self.gt_filepath, id.split("_")[0], id.split("_")[1])
+        gt_filepath = os.path.join(self.gt_filepath, id.split("_")[0], id.split("_")[1])
         gt_filename = filename + "_gtFine_labelIds.png"
-        gt_image_path = os.path.join(self.gt_filepath, gt_filename)
+        gt_image_path = os.path.join(gt_filepath, gt_filename)
         gt_image = Image.open(gt_image_path)
 
         if self.split == "train" or self.split == "trainval":
@@ -87,11 +100,8 @@ class City_Dataset(data.Dataset):
 
         return image, gt_image, filename
 
-
-
     def _train_sync_transform(self, img, mask):
         '''
-
         :param image:  PIL input image
         :param gt_image: PIL input gt_image
         :return:
@@ -183,7 +193,7 @@ class City_Dataset(data.Dataset):
         return image
 
     def _mask_transform(self, gt_image):
-        target = np.array(gt_image).astype('int32')
+        target = self._class_to_index(np.array(gt_image).astype('int32'))
         target = torch.from_numpy(target)
 
         return target
@@ -192,9 +202,9 @@ class City_Dataset(data.Dataset):
         return len(self.items)
 
 class City_DataLoader():
-    def __init__(self, split, config):
+    def __init__(self, args):
 
-        self.config = config
+        self.args = args
 
         # train_set = City_Dataset(data_path=self.config.cityscapes_path,
         #                         list_path='/city_list',
@@ -244,32 +254,45 @@ class City_DataLoader():
         #                                     num_workers=self.config.data_loader_workers,
         #                                     pin_memory=self.config.pin_memory,
         #                                     drop_last=True)
-        data_set = City_Dataset(data_path=self.config.cityscapes_path,
-                                list_path='/city_list',
-                                split=split,
-                                base_size=self.config.base_size,
-                                crop_size=self.config.crop_size)
+        data_set = City_Dataset(data_path=self.args.data_root_path,
+                                list_path=os.path.abspath('..'),
+                                split=self.args.split,
+                                base_size=self.args.base_size,
+                                crop_size=self.args.crop_size)
 
-        if split == "train" or split == "trainval":
+        if self.args.split == "train" or self.args.split == "trainval":
             self.data_loader = data.DataLoader(data_set,
-                                               batch_size=self.config.batch_size,
+                                               batch_size=self.args.batch_size,
                                                shuffle=True,
-                                               num_workers=self.config.data_loader_workers,
-                                               pin_memory=self.config.pin_memory,
+                                               num_workers=self.args.data_loader_workers,
+                                               pin_memory=self.args.pin_memory,
                                                drop_last=True)
-        elif split =="val" or split == "test":
+        elif self.args.split =="val" or self.args.split == "test":
             self.data_loader = data.DataLoader(data_set,
-                                               batch_size=self.config.batch_size,
+                                               batch_size=self.args.batch_size,
                                                shuffle=False,
-                                               num_workers=self.config.data_loader_workers,
-                                               pin_memory=self.config.pin_memory,
+                                               num_workers=self.args.data_loader_workers,
+                                               pin_memory=self.args.pin_memory,
                                                drop_last=True)
         else:
             raise Warning("split must be train/val/trainavl/test")
 
+        if self.args.split == "train" and self.args.validation == True:
+            val_set = City_Dataset(data_path=self.args.data_root_path,
+                                    list_path=os.path.abspath('..'),
+                                    split='val',
+                                    base_size=self.args.base_size,
+                                    crop_size=self.args.crop_size)
+            self.val_loader = data.DataLoader(val_set,
+                                             batch_size=self.args.batch_size,
+                                             shuffle=False,
+                                             num_workers=self.args.data_loader_workers,
+                                             pin_memory=self.args.pin_memory,
+                                             drop_last=True)
+            self.valid_iterations = (len(self.val_loader) + self.args.batch_size) // self.args.batch_size
 
+        self.num_iterations = (len(data_set) + self.args.batch_size) // self.args.batch_size
 
-        self.iterations_num = (len(data_set) + self.config.batch_size) // self.config.batch_size
 
 
 

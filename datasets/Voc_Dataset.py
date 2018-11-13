@@ -22,8 +22,8 @@ class Voc_Dataset(data.Dataset):
     def __init__(self,
                  root_path='/data/linhua/VOCdevkit',
                  dataset='voc2012_aug',
-                 base_size=520,
-                 crop_size=480,
+                 base_size=513,
+                 crop_size=513,
                  is_training=True):
         """
 
@@ -176,35 +176,34 @@ class Voc_Dataset(data.Dataset):
         return len(self.items)
 
 class VOCDataLoader():
-    def __init__(self, args, config):
+    def __init__(self, args):
 
-        self.config = config
         self.args = args
 
         train_set = Voc_Dataset(dataset=self.args.dataset,
-                                base_size=self.config.base_size,
-                                crop_size=self.config.crop_size,
+                                base_size=self.args.base_size,
+                                crop_size=self.args.crop_size,
                                 is_training=True)
         val_set = Voc_Dataset(dataset=self.args.dataset,
-                              base_size=self.config.base_size,
-                              crop_size=self.config.crop_size,
+                              base_size=self.args.base_size,
+                              crop_size=self.args.crop_size,
                               is_training=False)
 
         self.train_loader = data.DataLoader(train_set,
-                                            batch_size=self.config.batch_size,
+                                            batch_size=self.args.batch_size,
                                             shuffle=True,
-                                            num_workers=self.config.data_loader_workers,
-                                            pin_memory=self.config.pin_memory,
+                                            num_workers=self.args.data_loader_workers,
+                                            pin_memory=self.args.pin_memory,
                                             drop_last=True)
         self.valid_loader = data.DataLoader(val_set,
-                                            batch_size=self.config.batch_size,
+                                            batch_size=self.args.batch_size,
                                             shuffle=False,
-                                            num_workers=self.config.data_loader_workers,
-                                            pin_memory=self.config.pin_memory,
+                                            num_workers=self.args.data_loader_workers,
+                                            pin_memory=self.args.pin_memory,
                                             drop_last=True)
 
-        self.train_iterations = (len(train_set) + self.config.batch_size) // self.config.batch_size
-        self.valid_iterations = (len(val_set) + self.config.batch_size) // self.config.batch_size
+        self.train_iterations = (len(train_set) + self.args.batch_size) // self.args.batch_size
+        self.valid_iterations = (len(val_set) + self.args.batch_size) // self.args.batch_size
 
 
 
