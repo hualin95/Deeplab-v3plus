@@ -19,11 +19,11 @@ from tensorboardX import SummaryWriter
 
 import sys
 sys.path.append(os.path.abspath('..'))
-from graphs.models.sync_batchnorm.replicate import patch_replication_callback
-from utils.data_utils import calculate_weigths_labels
-from utils.eval import Eval
-from graphs.models.decoder import DeepLab
-from datasets.cityscapes_Dataset import City_DataLoader
+from libs.modules.sync_batchnorm.replicate import patch_replication_callback
+from libs.utils.data_utils import calculate_weigths_labels
+from libs.utils import Eval
+from libs.models.decoder import DeepLab
+from libs.datasets import City_DataLoader
 
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
@@ -329,16 +329,14 @@ class Trainer():
         if key == "1x":
             for m in model.named_modules():
                 if "Resnet101" in m[0]:
-                    if isinstance(m[1], nn.Conv2d):
-                        for p in m[1].parameters():
-                            yield p
+                    for p in m[1].parameters():
+                        yield p
         #
         if key == "10x":
             for m in model.named_modules():
                 if "encoder" in m[0] or "decoder" in m[0]:
-                    if isinstance(m[1], nn.Conv2d):
-                        for p in m[1].parameters():
-                            yield p
+                    for p in m[1].parameters():
+                        yield p
 
 
     def poly_lr_scheduler(self, optimizer, init_lr, iter, max_iter, power):
