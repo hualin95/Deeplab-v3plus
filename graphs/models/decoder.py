@@ -43,7 +43,7 @@ class Decoder(nn.Module):
         low_level_feature = self.conv1(low_level_feature)
         low_level_feature = self.bn1(low_level_feature)
         low_level_feature = self.relu(low_level_feature)
-        x_4 = F.interpolate(x, size=low_level_feature.size()[2:3], mode='bilinear' ,align_corners=True)
+        x_4 = F.interpolate(x, size=low_level_feature.size()[2:4], mode='bilinear' ,align_corners=True)
         x_4_cat = torch.cat((x_4, low_level_feature), dim=1)
         x_4_cat = self.conv2(x_4_cat)
         x_4_cat = self.bn2(x_4_cat)
@@ -82,7 +82,7 @@ class DeepLab(nn.Module):
 
         x = self.encoder(x)
         predict = self.decoder(x, low_level_features)
-        output= F.interpolate(predict, size=input.size()[2:3], mode='bilinear', align_corners=True)
+        output= F.interpolate(predict, size=input.size()[2:4], mode='bilinear', align_corners=True)
         return output
 
     def freeze_bn(self):
@@ -102,6 +102,3 @@ if __name__ =="__main__":
     for m in model.modules():
         if isinstance(m, SynchronizedBatchNorm2d):
             print(m)
-
-
-
