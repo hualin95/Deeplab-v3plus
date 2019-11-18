@@ -1,6 +1,6 @@
 matplotlib==3.0.0
 numpy==1.14.6
-pillow==5.3.0
+pillow==6.2.0
 tqdm==4.26.0
 tensorboardX==1.4
 torchsummary==1.5.1
