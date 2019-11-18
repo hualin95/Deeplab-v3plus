@@ -60,7 +60,7 @@ class AsppModule(nn.Module):
         input3 = self._atrous_convolution3(input)
         input4 = self._atrous_convolution4(input)
         input5 = self._image_pool(input)
-        input5 = F.interpolate(input=input5, size=input4.size()[2:3], mode='bilinear', align_corners=True)
+        input5 = F.interpolate(input=input5, size=input4.size()[2:4], mode='bilinear', align_corners=True)
 
         return torch.cat((input1, input2, input3, input4, input5), dim=1)
 
@@ -107,5 +107,3 @@ if __name__ =="__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = model.to(device)
     summary(model, (3, 512, 512))
-
-
