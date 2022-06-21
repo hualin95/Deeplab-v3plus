@@ -1,5 +1,5 @@
 matplotlib==3.0.0
-numpy==1.14.6
+numpy==1.22.0
 pillow==8.1.2
 tqdm==4.26.0
 tensorboardX==1.4
